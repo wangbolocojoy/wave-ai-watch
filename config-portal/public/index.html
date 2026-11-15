@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WAVE Watch · 配置中心</title>
+  <style>
+    :root { color-scheme: dark; --bg:#080d16; --panel:#131b27; --muted:#8b98ab; --white:#f4f7fc; --cyan:#50dedc; --lime:#bcef82; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(ellipse at 10% 0,#122838 0,transparent 40%),var(--bg); color:var(--white); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1020px,calc(100% - 32px)); margin:44px auto 72px; }
+    header { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:28px; }
+    h1 { font-size:32px; line-height:1.1; margin:0 0 8px; letter-spacing:-.04em; }
+    p { margin:0; color:var(--muted); }
+    .eyebrow { color:var(--cyan); text-transform:uppercase; font-size:12px; letter-spacing:.16em; margin-bottom:9px; }
+    .status { color:var(--lime); font-size:13px; white-space:nowrap; }
+    .layout { display:grid; grid-template-columns:1.15fr .85fr; gap:18px; }
+    section { background:rgba(19,27,39,.92); border:1px solid rgba(255,255,255,.06); border-radius:22px; padding:22px; }
+    section + section { margin-top:18px; }
+    h2 { font-size:17px; margin:0 0 16px; }
+    .faces { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .face { position:relative; overflow:hidden; height:220px; border:1px solid rgba(255,255,255,.09); border-radius:17px; text-align:left; color:var(--white); cursor:pointer; padding:0; background:#0a111d; transition:.18s ease; }
+    .face:hover { transform:translateY(-2px); border-color:var(--cyan); }
+    .face.selected { border:2px solid var(--cyan); box-shadow:0 0 0 3px rgba(80,222,220,.11); }
+    .face img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 44%; }
+    .face:last-child { grid-column:auto; justify-self:stretch; width:auto; }
+    .control { display:grid; grid-template-columns:1fr auto; gap:8px 16px; align-items:center; margin:18px 0; }
+    input[type=range] { width:100%; accent-color:var(--cyan); grid-column:1/2; }
+    .control small { color:var(--muted); grid-column:1/2; }
+    output { color:var(--cyan); font-variant-numeric:tabular-nums; }
+    .toggle-row,.check-row { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:12px 0; border-top:1px solid rgba(255,255,255,.07); }
+    input[type=checkbox] { accent-color:var(--cyan); width:17px;height:17px; }
+    input[type=text],select { width:100%; background:#0b111b; border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:11px 12px; color:var(--white); }
+    .field { margin:15px 0; }
+    .field label { display:block; color:var(--muted); font-size:13px; margin-bottom:7px; }
+    .button-row { display:flex; align-items:center; gap:14px; margin-top:22px; }
+    button.save { border:0; border-radius:12px; padding:12px 18px; background:var(--cyan); color:#071114; font-weight:700; cursor:pointer; }
+    button.secondary { border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:11px 14px; background:#0b111b; color:var(--white); cursor:pointer; }
+    button:disabled { opacity:.5; cursor:wait; }
+    a { color:var(--cyan); text-decoration:none; }
+    .note { font-size:12px; color:var(--muted); }
+    .screen-frame { display:flex; justify-content:center; padding:10px; border-radius:18px; border:1px solid rgba(255,255,255,.08); background:#05090f; }
+    #deviceScreen { display:block; width:min(100%,238px); aspect-ratio:410 / 502; object-fit:contain; border-radius:14px; background:#000; }
+    .screen-tools { display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }
+    .screen-tools label { color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px; }
+    .screen-status { color:var(--muted); font-size:12px; margin-left:auto; }
+    @media(max-width:760px) { .layout { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><div class="eyebrow">WAVE WATCH / 本机配置</div><h1>手表配置中心</h1><p>为手表挑选表盘，并调整设备偏好。</p></div>
+      <div class="status" id="status">正在读取配置…</div>
+    </header>
+    <div class="layout">
+      <div>
+        <section>
+          <h2>默认表盘</h2>
+          <div class="faces" id="faces">
+            <button class="face" data-face="luxe" aria-label="选择鎏金雅韵表盘"><img src="assets/face-luxe-zh.png" alt="鎏金雅韵：黑金数字表盘"></button>
+            <button class="face" data-face="sport" aria-label="选择活力运动表盘"><img src="assets/face-sport-zh.png" alt="活力运动：荧光运动环表盘"></button>
+            <button class="face" data-face="classic" aria-label="选择经典指针表盘"><img src="assets/face-classic-zh.png" alt="经典指针：浅色复古模拟表盘"></button>
+            <button class="face" data-face="cute" aria-label="选择鲸鱼娘表盘"><img src="assets/face-cute-zh.png" alt="DeepSeek 鲸鱼娘：无刻度浅蓝数字表盘"></button>
+          </div>
+          <div class="check-row"><span>表盘显示天气</span><input id="weather" type="checkbox"></div>
+          <div class="check-row"><span>表盘显示步数</span><input id="steps" type="checkbox"></div>
+          <div class="check-row"><span>表盘显示电量</span><input id="battery" type="checkbox"></div>
+        </section>
+        <section>
+          <h2>设备控制</h2>
+          <div class="control"><label for="brightness">屏幕亮度</label><output id="brightnessOut">72%</output><input id="brightness" type="range" min="10" max="100"><small>设备连接后应用到显示屏</small></div>
+          <div class="control"><label for="volume">语音音量</label><output id="volumeOut">55%</output><input id="volume" type="range" min="0" max="100"><small>控制语音播报与提示音</small></div>
+          <div class="toggle-row"><span>勿扰模式</span><input id="dnd" type="checkbox"></div>
+        </section>
+      </div>
+      <div>
+        <section>
+          <h2>手表实时屏幕 <span class="status" style="font-size:11px">LIVE</span></h2>
+          <div class="screen-frame"><img id="deviceScreen" alt="手表当前屏幕"></div>
+          <div class="screen-tools">
+            <button class="secondary" id="refreshScreen" type="button">刷新</button>
+            <label><input type="checkbox" id="autoScreen" checked>自动刷新</label>
+            <span class="screen-status" id="screenStatus">连接手表后显示</span>
+          </div>
+        </section>
+        <section>
+          <h2>连接手表</h2>
+          <p class="note">在手表「设置」中点击「网页配置配对」，然后填写手表的局域网地址即可；配对码可留空。开启配对后 60 秒内有效；连接凭据闲置 30 分钟后失效。请在可信任的 Wi-Fi 网络中使用。</p>
+          <div class="field"><label for="deviceHost">手表局域网 IPv4 地址</label><input id="deviceHost" type="text" inputmode="decimal" placeholder="例如 192.168.1.23" autocomplete="off"></div>
+          <div class="field"><label for="deviceCode">配对码（可留空）</label><input id="deviceCode" type="text" inputmode="numeric" maxlength="8" placeholder="留空，直接点手表配对" autocomplete="one-time-code"></div>
+          <div class="button-row"><button class="save" id="connectDevice">配对并读取</button><button class="secondary" id="disconnectDevice">断开</button></div>
+          <p class="note" id="deviceStatus" role="status" aria-live="polite">尚未连接手表</p>
+        </section>
+        <section>
+          <h2>小智语音助手</h2>
+          <p class="note">模型、音色和人设由小智官方控制台管理。当前固件使用内置唤醒词；手表联网后即可使用小智会话。</p>
+          <div class="button-row"><a href="https://xiaozhi.me/console/" target="_blank" rel="noreferrer">打开小智官方控制台 ↗</a></div>
+        </section>
+        <section>
+          <h2>设备能力</h2>
+          <p class="note">网页可同步表盘、屏幕亮度、语音音量和勿扰模式。天气、步数、电量组件仅保存在模拟器预设中。语音助手还可通过小智 MCP 控制音乐、活动、闹钟、计时器和内置应用。</p>
+        </section>
+        <div class="button-row"><button class="save" id="save">保存配置</button><span class="note" id="saveState">尚未修改</span></div>
+      </div>
+    </div>
+  </main>
+  <script>
+    const fields = ['brightness', 'volume', 'dnd', 'weather', 'steps', 'battery'];
+    let config = { face: 'cute', brightness:72, volume:55, doNotDisturb:false, assistantEnabled:true, wakeWord:'小智小智', language:'zh-CN', complications:{weather:true,steps:true,battery:true} };
+    let deviceConnected = false;
+    let screenTimer = null;
+    let screenObjectUrl = null;
+    let screenLoading = false;
+    const screenImage = document.querySelector('#deviceScreen');
+    const screenStatus = document.querySelector('#screenStatus');
+    const autoScreen = document.querySelector('#autoScreen');
+    const status = document.querySelector('#status');
+    const saveState = document.querySelector('#saveState');
+    const faces = [...document.querySelectorAll('.face')];
+
+    function setFace(face) {
+      config.face = face;
+      faces.forEach(button => button.classList.toggle('selected', button.dataset.face === face));
+    }
+    function render(next) {
+      config = next;
+      for (const key of fields) {
+        const input = document.getElementById(key);
+        if (input.type === 'checkbox') input.checked = ['weather', 'steps', 'battery'].includes(key)
+          ? !!config.complications[key] : !!config.doNotDisturb;
+        else input.value = config[key];
+      }
+      for (const key of ['brightness', 'volume']) document.getElementById(`${key}Out`).value = `${config[key]}%`;
+      setFace(config.face);
+      document.querySelector('#save').textContent = deviceConnected ? '保存并同步到手表' : '保存本机配置';
+    }
+    function collectConfig() {
+      return {
+        face: config.face,
+        brightness: Number(document.querySelector('#brightness').value),
+        volume: Number(document.querySelector('#volume').value),
+        doNotDisturb: document.querySelector('#dnd').checked,
+        assistantEnabled: config.assistantEnabled ?? true,
+        wakeWord: config.wakeWord ?? '小智小智',
+        language: 'zh-CN',
+        complications: Object.fromEntries(['weather', 'steps', 'battery'].map(key => [key, document.getElementById(key).checked])),
+      };
+    }
+    async function apiJson(url, options = {}) {
+      const response = await fetch(url, options);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `请求失败 (${response.status})`);
+      return result;
+    }
+    function stopScreenPreview() {
+      if (screenTimer !== null) {
+        clearInterval(screenTimer);
+        screenTimer = null;
+      }
+    }
+    function startScreenPreview() {
+      stopScreenPreview();
+      if (!deviceConnected || !autoScreen.checked) return;
+      screenTimer = setInterval(refreshScreen, 8000);
+      refreshScreen();
+    }
+    async function refreshScreen() {
+      if (!deviceConnected || screenLoading || document.visibilityState !== 'visible') return;
+      screenLoading = true;
+      try {
+        const response = await fetch('/api/device/screen', { cache: 'no-store' });
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          throw new Error(detail.error || `截图失败 (${response.status})`);
+        }
+        const blob = await response.blob();
+        if (screenObjectUrl) URL.revokeObjectURL(screenObjectUrl);
+        screenObjectUrl = URL.createObjectURL(blob);
+        screenImage.src = screenObjectUrl;
+        screenStatus.textContent = `实时 · ${new Date().toLocaleTimeString('zh-CN', {hour12:false})}`;
+      } catch (error) {
+        screenStatus.textContent = error.message;
+      } finally {
+        screenLoading = false;
+      }
+    }
+    async function refreshDeviceStatus() {
+      try {
+        const state = await apiJson('/api/device/status');
+        deviceConnected = !!state.connected;
+        if (!deviceConnected) {
+          document.querySelector('#deviceStatus').textContent = '尚未连接手表';
+          stopScreenPreview();
+        } else {
+          const remote = await apiJson('/api/device/config');
+          render({...config, ...remote});
+          document.querySelector('#deviceHost').value = state.host;
+          document.querySelector('#deviceStatus').textContent = `已连接 ${state.host} · 可同步手表设置`;
+          startScreenPreview();
+        }
+      } catch (error) {
+        deviceConnected = false;
+        stopScreenPreview();
+        document.querySelector('#deviceStatus').textContent = '手表连接已过期，请重新配对';
+      }
+      document.querySelector('#save').textContent = deviceConnected ? '保存并同步到手表' : '保存本机配置';
+    }
+    async function load() {
+      try {
+        const response = await fetch('/api/config');
+        if (!response.ok) throw new Error('读取失败');
+        render(await response.json());
+        status.textContent = '本机配置服务已连接';
+        status.style.color = 'var(--lime)';
+      } catch (error) {
+        status.textContent = '配置服务未连接';
+        status.style.color = '#ff9d8e';
+      }
+    }
+    faces.forEach(button => button.addEventListener('click', () => { setFace(button.dataset.face); saveState.textContent = '有未保存的更改'; }));
+    for (const key of ['brightness', 'volume']) document.getElementById(key).addEventListener('input', event => {
+      document.getElementById(`${key}Out`).value = `${event.target.value}%`;
+      saveState.textContent = '有未保存的更改';
+    });
+    fields.forEach(key => document.getElementById(key).addEventListener('change', () => { saveState.textContent = '有未保存的更改'; }));
+    document.querySelector('#connectDevice').addEventListener('click', async () => {
+      const button = document.querySelector('#connectDevice');
+      button.disabled = true;
+      document.querySelector('#deviceStatus').textContent = '正在连接手表…';
+      try {
+        const result = await apiJson('/api/device/pair', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ host: document.querySelector('#deviceHost').value.trim(), code: document.querySelector('#deviceCode').value.trim() }),
+        });
+        deviceConnected = true;
+        config = {...config, ...result.config};
+        render(config);
+        document.querySelector('#deviceCode').value = '';
+        document.querySelector('#deviceStatus').textContent = `已配对 ${result.host} · 当前设置已从手表读取`;
+        saveState.textContent = '设备设置已读取';
+        startScreenPreview();
+      } catch (error) {
+        deviceConnected = false;
+        stopScreenPreview();
+        document.querySelector('#deviceStatus').textContent = error.message;
+        document.querySelector('#save').textContent = '保存本机配置';
+      } finally {
+        button.disabled = false;
+      }
+    });
+    document.querySelector('#disconnectDevice').addEventListener('click', async () => {
+      try { await apiJson('/api/device/disconnect', { method: 'POST' }); } catch {}
+      deviceConnected = false;
+      stopScreenPreview();
+      screenImage.removeAttribute('src');
+      screenStatus.textContent = '连接手表后显示';
+      document.querySelector('#deviceStatus').textContent = '已断开手表';
+      document.querySelector('#save').textContent = '保存本机配置';
+    });
+    document.querySelector('#save').addEventListener('click', async () => {
+      const next = collectConfig();
+      try {
+        const result = await apiJson('/api/config', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(next) });
+        render(result.config);
+        if (deviceConnected) {
+          try {
+            await apiJson('/api/device/config', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(result.config) });
+            saveState.textContent = '配置已保存并同步到手表';
+            document.querySelector('#deviceStatus').textContent = `已同步到 ${document.querySelector('#deviceHost').value}`;
+          } catch (error) {
+            saveState.textContent = `本机已保存，手表同步失败：${error.message}`;
+          }
+        } else {
+          saveState.textContent = '已保存到本机配置服务';
+        }
+      } catch (error) {
+        saveState.textContent = error.message;
+      }
+    });
+    document.querySelector('#refreshScreen').addEventListener('click', refreshScreen);
+    autoScreen.addEventListener('change', () => {
+      if (autoScreen.checked) startScreenPreview(); else stopScreenPreview();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && deviceConnected && autoScreen.checked) refreshScreen();
+    });
+    load();
+    refreshDeviceStatus();
+  </script>
+</body>
+</html>

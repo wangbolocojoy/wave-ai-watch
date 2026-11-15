@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080d14">
+<title>WAVE Lab · 高保真手表模拟器</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23e9c987'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' font-family='Arial' font-weight='bold' fill='%23171207'%3EW%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg class="svg-sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-assistant" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 3v4M8 12h.01M16 12h.01M9 16h6M4 11H2M22 11h-2"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M4 14a8 8 0 1 1 16 0"/><path d="M7 16a5 5 0 1 1 10 0"/><path d="M12 13l3-3"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12 2.8l1.3 2.2 2.5-.7.7 2.5 2.4 1.1-1.2 2.2 1.2 2.2-2.4 1.1-.7 2.5-2.5-.7L12 21.2l-1.3-2.2-2.5.7-.7-2.5-2.4-1.1 1.2-2.2-1.2-2.2 2.4-1.1.7-2.5 2.5.7L12 2.8Z"/><circle cx="12" cy="12" r="3.1"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></symbol>
+  <symbol id="i-alarm" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3L3 5M19 3l2 2M3 21l2-2M21 21l-2-2"/></symbol>
+  <symbol id="i-steps" viewBox="0 0 24 24"><path d="M8 4c2 0 3 2 3 4s-1 4-3 4-3-2-3-4 1-4 3-4Z"/><path d="M16 11c2 0 3 2 3 4s-1 4-3 4-3-2-3-4 1-4 3-4Z"/></symbol>
+  <symbol id="i-battery" viewBox="0 0 24 24"><rect x="3" y="8" width="16" height="8" rx="2"/><path d="M22 11v2"/><path d="M6 11h7"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7V5Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5 5l10 7-10 7V5Z" fill="currentColor" stroke="none"/><path d="M19 5v14"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M19 5L9 12l10 7V5Z" fill="currentColor" stroke="none"/><path d="M5 5v14"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></symbol>
+</svg>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">W</div>
+      <div>
+        <div class="brand-title">WAVE Lab</div>
+        <div class="brand-sub">ESP32-S3 · AMOLED 2.06 · 高保真交互模拟器</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="conn-pill" id="configSource"><i></i><span>本机配置服务</span></span>
+      <a class="ghost" href="../">旧版模拟器</a>
+      <a class="ghost" href="../settings">配置中心</a>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <section class="stage" id="stage">
+      <div class="stage-top">
+        <div>
+          <div class="kicker">DEVICE PREVIEW</div>
+          <div class="stage-title">手表实时预览</div>
+        </div>
+        <div class="stage-meta">
+          <span class="live"><i></i>LIVE</span>
+          <span class="resolution">410 × 502 · AMOLED</span>
+        </div>
+      </div>
+
+      <div class="device-wrap" id="deviceWrap">
+        <div class="device" id="device">
+          <div class="strap strap-top"></div>
+          <div class="strap strap-bottom"></div>
+          <div class="case">
+            <span class="crown" aria-hidden="true"></span>
+            <span class="side-button" aria-hidden="true"></span>
+            <div class="screen" id="screen">
+              <div class="screen-inner" id="screenInner">
+                <div class="watch-face face-luxe" id="faceView"></div>
+                <div class="page-layer" id="pageLayer" hidden></div>
+
+                <div class="assistant-overlay" id="assistantOverlay" hidden>
+                  <div class="assistant-top">
+                    <span>WAVE · 小智</span>
+                    <span class="assistant-live"><i></i><b id="assistantStatus">待机</b></span>
+                  </div>
+                  <div class="assistant-eyes" id="assistantEyes">
+                    <div class="eye"><span class="pupil"></span></div>
+                    <div class="eye"><span class="pupil"></span></div>
+                  </div>
+                  <div class="assistant-mouth" aria-hidden="true"></div>
+                  <div class="assistant-state" id="assistantText">你好，我在这里</div>
+                  <div class="assistant-caption" id="assistantCaption">可以直接说话，也可以随时打断</div>
+                  <div class="waveform" aria-hidden="true">
+                    <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                  </div>
+                  <button class="assistant-end" id="assistantEnd" type="button">结束对话</button>
+                </div>
+
+                <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+                  <span class="toast-dot"></span>
+                  <span class="toast-text" id="toastText"></span>
+                </div>
+              </div>
+              <div class="glare" aria-hidden="true"></div>
+              <div class="screen-dim" id="screenDim" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage-bottom">
+        <div class="gesture-note" id="gestureNote">左右滑动切换表盘 · 上滑呼出小智 · 下滑查看活动<br>所有数据与状态都在本页实时模拟</div>
+        <div class="stage-actions">
+          <button class="action" id="prevFace" type="button">上一款</button>
+          <button class="action primary" id="voiceButton" type="button">呼出小智</button>
+          <button class="action" id="nextFace" type="button">下一款</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="rail">
+
+      <section class="card">
+        <div class="card-head">
+          <h2>设备状态</h2>
+          <span class="tag live-tag">实时</span>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat"><span>电量</span><strong id="statBattery">87%</strong></div>
+          <div class="stat"><span>步数</span><strong id="statSteps">6,842</strong></div>
+          <div class="stat"><span>语音</span><strong id="statVoice">待机</strong></div>
+          <div class="stat"><span>当前页面</span><strong id="statPage">表盘</strong></div>
+        </div>
+
+        <div class="range-row">
+          <label for="batteryRange">电量 <output id="batteryOut">87%</output></label>
+          <input id="batteryRange" type="range" min="0" max="100" step="1" value="87">
+        </div>
+        <div class="range-row">
+          <label for="brightnessRange">屏幕亮度 <output id="brightnessOut">72%</output></label>
+          <input id="brightnessRange" type="range" min="10" max="100" step="1" value="72">
+        </div>
+        <div class="range-row">
+          <label for="volumeRange">语音音量 <output id="volumeOut">55%</output></label>
+          <input id="volumeRange" type="range" min="0" max="100" step="1" value="55">
+        </div>
+
+        <div class="switch-grid">
+          <label class="check-line"><span>Wi-Fi</span><input id="wifiToggle" type="checkbox" checked></label>
+          <label class="check-line"><span>SD 卡</span><input id="sdToggle" type="checkbox" checked></label>
+          <label class="check-line"><span>IMU 计步</span><input id="imuToggle" type="checkbox" checked></label>
+          <label class="check-line"><span>勿扰模式</span><input id="dndToggle" type="checkbox"></label>
+          <label class="check-line"><span>自动计步</span><input id="autoStepsToggle" type="checkbox"></label>
+          <label class="check-line"><span>提示音</span><input id="soundToggle" type="checkbox" checked></label>
+        </div>
+
+        <div class="mini-actions">
+          <button class="mini" id="chargeToggle" type="button">模拟充电</button>
+          <button class="mini" id="stepAdd" type="button">+500 步</button>
+          <button class="mini" id="batteryDrop" type="button">电量 -20%</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>虚拟时间</h2>
+          <span class="tag" id="clockSpeedLabel">1×</span>
+        </div>
+        <div class="virtual-clock" id="virtualClock">09:41</div>
+        <div class="virtual-date" id="virtualDate">11月12日 周四</div>
+        <div class="seg" id="speedGroup">
+          <button type="button" data-speed="1" class="active">1×</button>
+          <button type="button" data-speed="60">60×</button>
+          <button type="button" data-speed="600">600×</button>
+          <button type="button" data-speed="3600">3600×</button>
+        </div>
+        <div class="time-actions">
+          <button class="mini" id="pauseClock" type="button">暂停时间</button>
+          <button class="mini" id="jumpHour" type="button">快进 1 小时</button>
+          <button class="mini" id="resetClock" type="button">回到现在</button>
+        </div>
+        <div class="time-set">
+          <label for="jumpTime">跳转到</label>
+          <input id="jumpTime" type="time" step="1">
+          <button class="mini" id="applyTime" type="button">应用</button>
+        </div>
+        <div class="next-alarm" id="nextAlarm">闹钟未开启</div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>语音 / MCP 控制台</h2>
+          <span class="tag">模拟</span>
+        </div>
+        <p class="panel-note">输入一句中文，模拟小智解析并调用设备 MCP 工具；结果会显示在手表上。</p>
+        <div class="command-row">
+          <input id="commandInput" type="text" placeholder="例如：播放清晨微光 / 倒计时 1 分钟" autocomplete="off">
+          <button class="send" id="runCommand" type="button">发送</button>
+        </div>
+        <div class="chips" id="commandChips">
+          <button type="button" data-command="播放清晨微光">播放清晨微光</button>
+          <button type="button" data-command="下一首">下一首</button>
+          <button type="button" data-command="暂停音乐">暂停音乐</button>
+          <button type="button" data-command="倒计时 1 分钟">倒计时 1 分钟</button>
+          <button type="button" data-command="设置 07:00 闹钟">设置 07:00 闹钟</button>
+          <button type="button" data-command="关闭闹钟">关闭闹钟</button>
+          <button type="button" data-command="把亮度调到 80">亮度 80%</button>
+          <button type="button" data-command="切换经典指针">切换经典指针</button>
+          <button type="button" data-command="打开活动">打开活动</button>
+          <button type="button" data-command="查询步数">查询步数</button>
+        </div>
+        <div class="last-response" id="lastResponse">等待指令…</div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>配对与配置</h2>
+          <span class="tag" id="pairState">未配对</span>
+        </div>
+        <div class="pair-box">
+          <div><span>虚拟设备</span><strong id="pairIp">192.168.1.23</strong></div>
+          <div><span>一次性配对码</span><strong class="mono" id="pairCode">--------</strong></div>
+          <div><span>剩余时间</span><strong id="pairCountdown">--</strong></div>
+        </div>
+        <div class="time-actions">
+          <button class="mini" id="openPairing" type="button">开启配对</button>
+          <button class="mini" id="copyPair" type="button">复制配对信息</button>
+        </div>
+        <div class="command-row pair-input-row">
+          <input id="pairInput" type="text" inputmode="numeric" maxlength="8" placeholder="输入配对码" autocomplete="one-time-code">
+          <button class="send" id="simulatePair" type="button">模拟配对</button>
+        </div>
+        <div class="time-actions">
+          <button class="mini" id="syncConfig" type="button">从配置中心读取</button>
+          <button class="mini" id="pushConfig" type="button">保存到配置中心</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>固件缺陷复刻</h2>
+          <span class="tag warn-tag">诊断</span>
+        </div>
+        <p class="panel-note">默认按设计稿渲染。打开开关可以复刻当前固件的已知问题，用来对照检查。</p>
+        <div class="switch-grid">
+          <label class="check-line"><span>所有文字 30px</span><input id="font30Toggle" type="checkbox"></label>
+          <label class="check-line"><span>经典表盘深色底</span><input id="classicDarkToggle" type="checkbox"></label>
+          <label class="check-line"><span>系统通知被遮挡</span><input id="hideNotifyToggle" type="checkbox"></label>
+        </div>
+        <div class="time-actions">
+          <button class="mini" id="copyState" type="button">复制状态 JSON</button>
+        </div>
+        <pre class="state-json" id="stateJson"></pre>
+      </section>
+
+      <section class="card log-card">
+        <div class="card-head">
+          <h2>事件日志</h2>
+          <button class="mini" id="clearLog" type="button">清空</button>
+        </div>
+        <div class="event-log" id="eventLog"></div>
+      </section>
+
+    </aside>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

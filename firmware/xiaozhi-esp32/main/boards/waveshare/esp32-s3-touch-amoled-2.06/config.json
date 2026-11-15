@@ -1,0 +1,21 @@
+{
+    "manufacturer": "waveshare",
+    "type": "esp32-s3-touch-amoled-2.06",
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "esp32-s3-touch-amoled-2.06",
+            "sdkconfig_append": [
+                "CONFIG_USE_WECHAT_MESSAGE_STYLE=n",
+                "CONFIG_USE_DEVICE_AEC=y",
+                "CONFIG_FATFS_API_ENCODING_UTF_8=y",
+                "CONFIG_LV_USE_KEYBOARD=y",
+                "CONFIG_CUSTOM_WAKE_WORD=\"ni hao da fei yu\"",
+                "CONFIG_CUSTOM_WAKE_WORD_DISPLAY=\"你好大肥鱼\"",
+                "CONFIG_CUSTOM_WAKE_WORD_ALT=\"hai da fei yu\"",
+                "CONFIG_CUSTOM_WAKE_WORD_ALT_DISPLAY=\"嗨大肥鱼\"",
+                "CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=25"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f5f8">
+  <title>WAVE Studio · 手表模拟器</title>
+  <style>
+    :root { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif; color:#18212b; background:#f2f4f7; font-synthesis:none; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(ellipse at 32% 10%,#fff 0,#f4f6f9 38%,#edf0f4 100%); }
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+    .app { width:min(1280px,calc(100% - 48px)); margin:0 auto; padding:28px 0 40px; }
+    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:26px; }
+    .brand { display:flex; align-items:center; gap:13px; }
+    .brand-mark { width:39px;height:39px;border-radius:13px;background:#151b22;color:#d8bd82;display:grid;place-items:center;font-size:17px;font-weight:800;letter-spacing:-1px;box-shadow:0 4px 12px #12182022; }
+    .brand-title { font-size:15px;font-weight:740;letter-spacing:.02em; }
+    .brand-sub { margin-top:2px;color:#85909b;font-size:11px;letter-spacing:.06em; }
+    .header-actions { display:flex;align-items:center;gap:10px; }
+    .connection { display:flex;align-items:center;gap:8px;margin-right:9px;color:#75808b;font-size:12px; }
+    .dot { width:7px;height:7px;border-radius:50%;background:#d2a753;box-shadow:0 0 0 4px #d2a75320; }
+    .nav-btn { border:1px solid #e0e4e9;background:#fff;color:#4e5965;border-radius:10px;padding:9px 13px;font-size:12px;font-weight:650;box-shadow:0 2px 7px #18212b08; }
+    .nav-btn.active { background:#19212b;color:#fff;border-color:#19212b; }
+    .workspace { display:grid;grid-template-columns:minmax(0,1fr) 344px;gap:22px;align-items:stretch; }
+    .stage { position:relative;min-height:720px;border:1px solid #e6e9ee;border-radius:25px;background:linear-gradient(145deg,#fbfcfd,#edf1f5);overflow:hidden;box-shadow:0 16px 48px #26364b0d; }
+    .stage:before { content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 42%,#dfe6ed 0,transparent 43%);pointer-events:none; }
+    .stage-head { position:absolute;z-index:2;left:28px;right:28px;top:24px;display:flex;justify-content:space-between;align-items:flex-start; }
+    .kicker { text-transform:uppercase;letter-spacing:.15em;color:#9aa3ac;font-size:10px;font-weight:700; }
+    .stage-title { margin-top:6px;font-size:17px;font-weight:720;letter-spacing:-.02em; }
+    .resolution { border:1px solid #e3e7eb;background:#ffffffb8;color:#8a949e;border-radius:9px;padding:7px 9px;font-size:10px;font-variant-numeric:tabular-nums; }
+    .watch-position { position:absolute;inset:80px 0 100px;display:grid;place-items:center; }
+    .watch-assembly { position:relative;width:min(390px,67vw);aspect-ratio:2/3;filter:drop-shadow(0 26px 22px #252d3826);user-select:none;touch-action:pan-y; }
+    .device-image { position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none; }
+    .watch-screen { position:absolute;left:13.8%;top:20.4%;width:68.8%;height:54.2%;overflow:hidden;border-radius:24%;background:#08090c; }
+    .face-image { display:block;width:100%;height:100%;object-fit:cover; }
+    .crown-hitbox { position:absolute;z-index:5;left:82.5%;top:32%;width:16%;height:14%;padding:0;border:0;border-radius:50%;background:transparent; }
+    .crown-hitbox:focus-visible { outline:2px solid #d8bd82;outline-offset:2px; }
+    .virtual-page { display:none;position:absolute;inset:0;overflow:hidden; }
+    .virtual-page.visible { display:flex; }
+    .assistant-page { flex-direction:column;align-items:center;justify-content:flex-start;color:#f3f8fc;background:radial-gradient(ellipse at 50% 42%,#183749,#05090e 74%);padding:8% 8% 5%;text-align:center; }
+    .assistant-top { width:100%;display:flex;justify-content:space-between;align-items:center;color:#8ea6b6;font-size:clamp(7px,1.8vw,10px);letter-spacing:.12em; }
+    .assistant-live { display:flex;align-items:center;gap:5px;letter-spacing:0; }
+    .assistant-live i { width:5px;height:5px;border-radius:50%;background:#62e5c0;box-shadow:0 0 9px #62e5c0; }
+    .eyes { display:flex;align-items:center;justify-content:center;gap:8%;width:100%;margin-top:14%; }
+    .eye { position:relative;width:36%;aspect-ratio:1.04/1;border-radius:48% 48% 44% 44%;background:linear-gradient(145deg,#f8ffff,#b6e9f0);box-shadow:inset 0 -8px 16px #55b4c52b,0 0 25px #7feaff26;overflow:hidden;animation:eye-breathe 4.2s ease-in-out infinite; }
+    .eye:nth-child(2) { animation-delay:.18s; }
+    .pupil { position:absolute;width:40%;height:51%;left:34%;top:26%;border-radius:50%;background:radial-gradient(circle at 34% 25%,#6b9db4 0 8%,#142a41 10% 70%,#081522 100%);box-shadow:0 2px 8px #07142150;animation:gaze 6.8s ease-in-out infinite; }
+    .assistant-page.listening .pupil { animation-duration:2.8s; }
+    .assistant-page.speaking .pupil { animation-duration:1.3s; }
+    .eye:nth-child(2) .pupil { animation-delay:-.15s; }
+    .pupil:after { content:"";position:absolute;left:22%;top:17%;width:23%;height:19%;border-radius:50%;background:#fff;box-shadow:9px 8px 0 -3px #fff9; }
+    .assistant-mouth { width:14%;height:2px;border-radius:3px;background:#91dce7;margin-top:8%;box-shadow:0 0 10px #67d8e8;transition:all .25s; }
+    .assistant-page.speaking .assistant-mouth { height:10px;width:19%;border-radius:50%; }
+    .assistant-page.listening .assistant-mouth { width:22%;height:3px; }
+    .assistant-state { margin-top:8%;font-size:clamp(11px,2.7vw,16px);font-weight:650;letter-spacing:.05em; }
+    .assistant-hint { margin-top:3%;font-size:clamp(8px,1.9vw,11px);color:#8398a8; }
+    .activity-page { flex-direction:column;align-items:center;justify-content:center;color:#eef8ff;background:radial-gradient(circle at 50% 53%,#112332,#05080c 72%); }
+    .activity-date { color:#38a9ff;font-size:clamp(9px,2.1vw,13px);font-weight:650;margin-bottom:5%; }
+    .activity-time { font-size:clamp(31px,8vw,49px);font-weight:760;letter-spacing:-.06em; }
+    .activity-ring { width:57%;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;margin-top:5%;background:conic-gradient(from -28deg,#43f8cf 0 72%,#12b5ff 72% 87%,#202b37 87% 100%);position:relative; }
+    .activity-ring:before { content:"";position:absolute;inset:9%;border-radius:50%;background:#080d13; }
+    .activity-count { position:relative;text-align:center;font-size:clamp(24px,6vw,36px);font-weight:760;letter-spacing:-.04em; }
+    .activity-count small { display:block;font-size:clamp(9px,2vw,12px);color:#75dff3;letter-spacing:.12em;margin-top:4px; }
+    .activity-foot { display:flex;gap:20px;color:#a0aeb9;font-size:clamp(8px,1.7vw,10px);margin-top:7%; }
+    .quick-page { flex-direction:column;color:#edf4fa;background:linear-gradient(150deg,#101b24,#070a0f);padding:10%; }
+    .quick-title { font-size:clamp(15px,3.5vw,22px);font-weight:700;margin:4% 0 9%; }
+    .quick-row { display:flex;justify-content:space-between;align-items:center;border-top:1px solid #ffffff15;padding:8% 0;color:#afbdc9;font-size:clamp(10px,2.4vw,14px); }
+    .quick-row b { color:#eff8ff;font-size:clamp(11px,2.5vw,15px); }
+    .app-page { flex-direction:column;color:#edf4fa;background:radial-gradient(ellipse at 50% 0,#193442,#070b10 78%);padding:7%; }
+    .launcher-page { display:none;position:absolute;inset:0;flex-direction:column;color:#f2f7fa;background:radial-gradient(ellipse at 50% 0,#203c4b,#071018 78%);padding:7% 7% 6%; }
+    .launcher-page.visible { display:flex; }
+    .launcher-top { display:flex;justify-content:space-between;align-items:center;color:#95aab7;font-size:clamp(8px,1.8vw,10px);letter-spacing:.08em; }
+    .launcher-title { margin:5% 0 5%;font-size:clamp(17px,4vw,23px);font-weight:750; }
+    .launcher-grid { display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,minmax(0,1fr));gap:7%;flex:1;min-height:0; }
+    .launch-icon { display:flex;min-width:0;flex-direction:column;align-items:center;justify-content:center;gap:7%;border:0;background:transparent;color:#e8f1f5;padding:0;font-size:clamp(8px,2vw,11px);font-weight:600; }
+    .launch-icon:focus-visible { outline:1px solid #d8bd82;border-radius:12px; }
+    .launch-glyph { display:grid;width:min(66%,58px);aspect-ratio:1;place-items:center;border:1px solid #ffffff38;border-radius:23px;background:linear-gradient(145deg,var(--icon-glow),#101d27 72%);box-shadow:inset 0 1px #ffffff2c,0 6px 14px #0005;color:var(--icon-color);font-size:clamp(21px,5vw,30px); }
+    .app-top { display:flex;justify-content:space-between;color:#91a6b3;font-size:clamp(8px,1.8vw,10px); }
+    .app-title { font-size:clamp(15px,3.5vw,21px);font-weight:740;margin:5% 0 3%; }
+    .track-list { display:grid;grid-template-rows:repeat(3,1fr);gap:5px;flex:1;min-height:0; }
+    .track-option { border:1px solid #ffffff17;border-radius:9px;background:#ffffff08;color:#eaf3f7;text-align:left;padding:5px 8px;font-size:clamp(8px,1.9vw,11px);line-height:1.3; }
+    .track-option.selected { border-color:#50dedc88;background:#153944;color:#8cf0e4; }
+    .track-option small { display:block;color:#92a6b2;font-size:.82em;margin-top:2px; }
+    .now-playing { display:flex;align-items:center;justify-content:space-between;gap:4px;margin:5% 0 3%;font-size:clamp(8px,1.8vw,10px);color:#9db1bd; }
+    .now-playing b { color:#ecf6f8;font-size:clamp(9px,2.1vw,12px); }
+    .player-controls { display:flex;justify-content:center;gap:8px; }
+    .player-controls button,.preset-row button { min-width:0;border:1px solid #ffffff18;border-radius:8px;background:#19303b;color:#e6f2f4;padding:6px 9px;font-size:clamp(9px,2vw,12px); }
+    .player-controls button.primary { color:#79e8dc;border-color:#50dedc55; }
+    .alarm-time { font-size:clamp(34px,8vw,48px);font-weight:760;letter-spacing:-.05em;text-align:center;color:#e9c987;margin:12% 0 3%;font-variant-numeric:tabular-nums; }
+    .alarm-state { text-align:center;color:#9cb0bb;font-size:clamp(9px,2vw,12px);margin-bottom:auto; }
+    .preset-row { display:flex;justify-content:center;gap:5px;margin:8% 0; }
+    .preset-row button { flex:1;padding:7px 3px; }
+    .alarm-toggle { width:100%;border:0;border-radius:10px;background:#d2b16c;color:#12161a;padding:8px;font-size:clamp(9px,2.2vw,12px);font-weight:750; }
+    .timer-value { text-align:center;font-size:clamp(31px,7vw,44px);font-weight:760;font-variant-numeric:tabular-nums;color:#80e5d9;margin:23% 0 8%; }
+    .timer-state { text-align:center;color:#9cb0bb;font-size:clamp(9px,2vw,12px);margin-bottom:auto; }
+    .timer-presets { display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:9% 0; }
+    .timer-presets button { border:1px solid #ffffff18;border-radius:8px;background:#19303b;color:#e6f2f4;padding:7px 2px;font-size:clamp(9px,2vw,12px); }
+    .timer-cancel { border:1px solid #ffffff20;border-radius:9px;background:#ffffff0a;color:#c1ccd2;padding:7px;font-size:clamp(9px,2vw,12px); }
+    .stage-foot { position:absolute;bottom:0;left:0;right:0;padding:17px 24px 18px;border-top:1px solid #e5e9ed;background:#f9fafbc9;backdrop-filter:blur(15px);display:flex;align-items:center;justify-content:space-between;gap:15px; }
+    .gesture-note { font-size:11px;color:#818b95;line-height:1.45; }
+    .stage-actions { display:flex;gap:8px; }
+    .action { border:1px solid #e0e5e9;border-radius:10px;background:#fff;color:#4e5963;padding:9px 12px;font-size:11px;font-weight:650;white-space:nowrap; }
+    .action.primary { background:#19212b;border-color:#19212b;color:#f4f7f9; }
+    .side { display:flex;flex-direction:column;gap:14px; }
+    .panel { border:1px solid #e6e9ed;border-radius:19px;background:#fff;padding:18px;box-shadow:0 8px 25px #26364b08; }
+    .panel-head { display:flex;justify-content:space-between;align-items:center;margin-bottom:13px; }
+    .panel-title { font-size:13px;font-weight:730; }
+    .panel-caption { font-size:10px;color:#a0a8b0; }
+    .face-list { display:grid;gap:8px; }
+    .face-option { width:100%;display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:11px;border:1px solid transparent;background:#f6f7f8;border-radius:12px;text-align:left;padding:7px;transition:.16s; }
+    .face-option:hover { background:#f1f4f6; }
+    .face-option.selected { background:#fbf8f1;border-color:#d4bf91;box-shadow:0 0 0 2px #d5c49b20; }
+    .face-option img { width:48px;height:58px;border-radius:7px;object-fit:cover;object-position:center 36%;background:#101216; }
+    .face-name { font-size:12px;font-weight:680;color:#27313a; }
+    .face-desc { margin-top:3px;font-size:10px;color:#8d97a1; }
+    .check { width:16px;height:16px;border-radius:50%;border:1px solid #d0d6dc;display:grid;place-items:center;color:transparent;font-size:10px; }
+    .selected .check { background:#b69b61;border-color:#b69b61;color:#fff; }
+    .control { margin-top:13px; }
+    .control:first-of-type { margin-top:4px; }
+    .control-label { display:flex;justify-content:space-between;align-items:center;color:#5d6872;font-size:11px;margin-bottom:8px; }
+    output { color:#202b35;font-weight:650;font-variant-numeric:tabular-nums; }
+    input[type=range] { width:100%;height:4px;accent-color:#b69b61; }
+    .toggle-line { display:flex;align-items:center;justify-content:space-between;border-top:1px solid #edf0f2;padding-top:13px;margin-top:12px;color:#5d6872;font-size:11px; }
+    .switch { appearance:none;width:34px;height:19px;border-radius:20px;background:#dce1e5;position:relative;transition:.18s;outline:none; }
+    .switch:before { content:"";position:absolute;width:15px;height:15px;left:2px;top:2px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #17202b30;transition:.18s; }
+    .switch:checked { background:#b59a60; }
+    .switch:checked:before { left:17px; }
+    .pages { display:grid;grid-template-columns:repeat(3,1fr);gap:7px; }
+    .page-btn { border:1px solid #e6e9ec;border-radius:10px;background:#fafbfc;padding:10px 5px;color:#6d7780;font-size:10px;font-weight:650; }
+    .page-btn.active { border-color:#c4ad78;background:#faf7ef;color:#705c32; }
+    .page-state { margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#8b959f; }
+    .state-pill { border-radius:99px;background:#f2f4f6;padding:5px 8px;color:#6e7982; }
+    .save-state { color:#7d8993;font-size:10px;text-align:right;min-height:14px;margin-top:10px; }
+    @keyframes gaze { 0%,13%{transform:translate(4px,2px)} 22%,35%{transform:translate(-5px,5px)} 45%,55%{transform:translate(0,-3px)} 68%,80%{transform:translate(5px,7px)} 90%,100%{transform:translate(0,2px)} }
+    @keyframes eye-breathe { 0%,45%,49%,100%{transform:scaleY(1)} 47%{transform:scaleY(.76)} }
+    @media(max-width:980px) { .workspace { grid-template-columns:minmax(0,1fr) 300px;gap:14px; } .stage { min-height:680px; } .watch-assembly { width:min(360px,64vw); } }
+    @media(max-width:740px) { .app{width:min(100% - 24px,520px);padding-top:17px;}header{margin-bottom:16px}.brand-sub,.connection{display:none}.header-actions{gap:6px}.nav-btn{padding:8px 10px}.workspace{grid-template-columns:1fr}.stage{min-height:650px}.watch-position{inset:72px 0 92px}.watch-assembly{width:min(340px,79vw)}.side{display:grid;grid-template-columns:1fr}.stage-foot{padding:13px 12px;align-items:flex-start;flex-direction:column}.stage-actions{width:100%}.action{flex:1;text-align:center}.face-list{grid-template-columns:repeat(3,1fr)}.face-option{grid-template-columns:1fr;justify-items:center;text-align:center;padding:7px 4px;gap:5px}.face-option img{width:54px;height:66px}.face-option .check{display:none}.face-desc{font-size:9px} }
+    @media(max-width:390px){.header-actions .nav-btn{font-size:10px;padding:8px}.stage{min-height:600px}.watch-assembly{width:min(310px,82vw)}.resolution{display:none}.face-option img{width:45px;height:56px}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div class="brand"><div class="brand-mark">W</div><div><div class="brand-title">WAVE Studio</div><div class="brand-sub">ESP32-S3 · AMOLED 2.06</div></div></div>
+      <div class="header-actions"><div class="connection"><i class="dot"></i><span>模拟器运行中</span></div><button class="nav-btn active">模拟器</button><a class="nav-btn" href="/lab">高保真 Lab</a><a class="nav-btn" href="/settings">配置中心</a></div>
+    </header>
+    <div class="workspace">
+      <section class="stage">
+        <div class="stage-head"><div><div class="kicker">DEVICE PREVIEW</div><div class="stage-title">手表实时预览</div></div><div class="resolution">410 × 502 · AMOLED</div></div>
+        <div class="watch-position">
+          <div class="watch-assembly" id="watch" aria-label="手表模拟器屏幕">
+            <img class="device-image" src="assets/watch-device.png" alt="黑色 AMOLED 手表机身">
+            <div class="watch-screen" id="watchScreen">
+              <img class="face-image" id="faceImage" src="assets/face-luxe-zh.png" alt="鎏金雅韵表盘">
+              <section class="launcher-page" id="launcherPage" aria-label="应用列表">
+                <div class="launcher-top"><span>WAVE · 应用</span><span>按表冠返回表盘</span></div>
+                <div class="launcher-title">应用</div>
+                <div class="launcher-grid">
+                  <button class="launch-icon" data-launch="assistant" style="--icon-color:#8bf1e6;--icon-glow:#1c6061" aria-label="小智助手"><span class="launch-glyph">◉</span><span>小智</span></button>
+                  <button class="launch-icon" data-launch="music" style="--icon-color:#f0a6c8;--icon-glow:#5e324e" aria-label="音乐播放器"><span class="launch-glyph">♫</span><span>音乐</span></button>
+                  <button class="launch-icon" data-launch="activity" style="--icon-color:#b8e994;--icon-glow:#385c36" aria-label="活动记录"><span class="launch-glyph">⌁</span><span>活动</span></button>
+                  <button class="launch-icon" data-launch="alarm" style="--icon-color:#e9c987;--icon-glow:#665335" aria-label="每日闹钟"><span class="launch-glyph">◷</span><span>闹钟</span></button>
+                  <button class="launch-icon" data-launch="timer" style="--icon-color:#8fc6ff;--icon-glow:#31527a" aria-label="倒计时"><span class="launch-glyph">⌛</span><span>计时器</span></button>
+                  <button class="launch-icon" data-launch="quick" style="--icon-color:#c6d5df;--icon-glow:#46535d" aria-label="设置"><span class="launch-glyph">⚙</span><span>设置</span></button>
+                </div>
+              </section>
+              <section class="virtual-page assistant-page" id="assistantPage">
+                <div class="assistant-top"><span>WAVE · 小智</span><span class="assistant-live"><i></i><b id="voiceStatus">待机</b></span></div>
+                <div class="eyes"><div class="eye"><div class="pupil"></div></div><div class="eye"><div class="pupil"></div></div></div>
+                <div class="assistant-mouth"></div><div class="assistant-state" id="assistantText">你好，我在这里</div>
+                <div class="assistant-hint">轻点下方按钮，演示语音对话</div>
+              </section>
+              <section class="virtual-page activity-page" id="activityPage">
+                <div class="activity-date" id="activityDate">11月12日 周四</div><div class="activity-time" id="activityTime">09:41</div>
+                <div class="activity-ring"><div class="activity-count">6,842<small>今日步数</small></div></div>
+                <div class="activity-foot"><span>目标 8,000 步</span><span>电量 87%</span></div>
+              </section>
+              <section class="virtual-page app-page" id="musicPage">
+                <div class="app-top"><span>WAVE · SD 卡</span><span>MP3 / WAV</span></div>
+                <div class="app-title">音乐播放器</div>
+                <div class="track-list" id="trackList">
+                  <button class="track-option selected" data-track="0">清晨微光<small>WAVE 原创曲库</small></button>
+                  <button class="track-option" data-track="1">海风来信<small>WAVE 原创曲库</small></button>
+                  <button class="track-option" data-track="2">星夜漫步<small>WAVE 原创曲库</small></button>
+                </div>
+                <div class="now-playing"><span>当前曲目</span><b id="musicTitle">清晨微光</b><b id="musicStatus">已暂停</b></div>
+                <div class="player-controls"><button id="musicPrev" aria-label="上一首">|◀</button><button class="primary" id="musicToggle">▶ 播放</button><button id="musicNext" aria-label="下一首">▶|</button></div>
+              </section>
+              <section class="virtual-page app-page" id="alarmPage">
+                <div class="app-top"><span>WAVE · 闹钟</span><span id="alarmBadge">每日重复</span></div>
+                <div class="app-title">每日闹钟</div>
+                <div class="alarm-time" id="alarmTime">07:00</div>
+                <div class="alarm-state" id="alarmState">闹钟已关闭</div>
+                <div class="preset-row"><button data-alarm="07:00">07:00</button><button data-alarm="07:30">07:30</button><button data-alarm="08:00">08:00</button></div>
+                <button class="alarm-toggle" id="alarmToggle">开启闹钟</button>
+              </section>
+              <section class="virtual-page app-page" id="timerPage">
+                <div class="app-top"><span>WAVE · 计时器</span><span>最长 24 小时</span></div>
+                <div class="app-title">倒计时</div>
+                <div class="timer-value" id="timerValue">00:00</div>
+                <div class="timer-state" id="timerState">选择快捷时长</div>
+                <div class="timer-presets"><button data-timer="60">1 分钟</button><button data-timer="300">5 分钟</button><button data-timer="600">10 分钟</button></div>
+                <button class="timer-cancel" id="timerCancel">取消计时</button>
+              </section>
+              <section class="virtual-page quick-page" id="quickPage">
+                <div class="quick-title">快捷设置</div><div class="quick-row"><span>屏幕亮度</span><b id="screenBrightness">72%</b></div>
+                <div class="quick-row"><span>语音音量</span><b id="screenVolume">55%</b></div><div class="quick-row"><span>勿扰模式</span><b id="screenDnd">关闭</b></div>
+                <div class="quick-row"><span>每日闹钟</span><b id="screenAlarm">关闭</b></div>
+                <div class="quick-row"><span>连接状态</span><b>等待设备</b></div>
+              </section>
+            </div>
+            <button class="crown-hitbox" id="crownButton" aria-label="按下数字表冠进入或退出应用列表" title="按下表冠：进入或退出应用列表"></button>
+          </div>
+        </div>
+        <div class="stage-foot"><div class="gesture-note" id="gestureNote">按手表右侧表冠打开应用列表<br>横向滑动切换表盘，向上滑动打开小智</div><div class="stage-actions"><button class="action" id="prevFace">上一款</button><button class="action primary" id="voiceDemo">开始对话演示</button><button class="action" id="nextFace">下一款</button></div></div>
+      </section>
+      <aside class="side">
+        <section class="panel"><div class="panel-head"><div class="panel-title">内置中文表盘</div><div class="panel-caption">点击预览切换</div></div>
+          <div class="face-list" id="faceList">
+            <button class="face-option selected" data-face="luxe"><img src="assets/face-luxe-zh.png" alt="鎏金雅韵预览"><span><span class="face-name">鎏金雅韵</span><span class="face-desc">暖金 · 优雅</span></span><span class="check">✓</span></button>
+            <button class="face-option" data-face="sport"><img src="assets/face-sport-zh.png" alt="活力运动预览"><span><span class="face-name">活力运动</span><span class="face-desc">渐变 · 活力</span></span><span class="check">✓</span></button>
+            <button class="face-option" data-face="classic"><img src="assets/face-classic-zh.png" alt="经典指针预览"><span><span class="face-name">经典指针</span><span class="face-desc">奶油 · 复古</span></span><span class="check">✓</span></button>
+          </div>
+          <div class="save-state" id="saveState">配置已同步</div>
+        </section>
+        <section class="panel"><div class="panel-head"><div class="panel-title">设备控制</div><div class="panel-caption">模拟设置</div></div>
+          <div class="control"><div class="control-label"><label for="brightness">屏幕亮度</label><output id="brightnessOut">72%</output></div><input id="brightness" type="range" min="10" max="100" value="72"></div>
+          <div class="control"><div class="control-label"><label for="volume">语音音量</label><output id="volumeOut">55%</output></div><input id="volume" type="range" min="0" max="100" value="55"></div>
+          <div class="toggle-line"><label for="dnd">勿扰模式</label><input class="switch" id="dnd" type="checkbox"></div>
+        </section>
+        <section class="panel"><div class="panel-head"><div class="panel-title">模拟手表页面</div><div class="panel-caption">快速打开</div></div>
+          <div class="pages"><button class="page-btn active" data-page="face">表盘</button><button class="page-btn" data-page="launcher">应用</button><button class="page-btn" data-page="assistant">小智助手</button><button class="page-btn" data-page="activity">活动</button><button class="page-btn" data-page="music">音乐</button><button class="page-btn" data-page="alarm">闹钟</button><button class="page-btn" data-page="timer">计时器</button><button class="page-btn" data-page="quick">设置</button></div>
+          <div class="page-state"><span>当前页面</span><span class="state-pill" id="pageState">鎏金雅韵</span></div>
+        </section>
+        <section class="panel"><div class="panel-head"><div class="panel-title">设备信息</div><div class="panel-caption">开发板预览</div></div>
+          <div class="control-label"><span>屏幕尺寸</span><output>2.06 英寸</output></div>
+          <div class="control-label"><span>屏幕分辨率</span><output>410 × 502</output></div>
+          <div class="control-label"><span>小智连接</span><output style="color:#b08e50">待连接开发板</output></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const faces = [
+      {id:'luxe',name:'鎏金雅韵',src:'assets/face-luxe-zh.png'},
+      {id:'sport',name:'活力运动',src:'assets/face-sport-zh.png'},
+      {id:'classic',name:'经典指针',src:'assets/face-classic-zh.png'},
+    ];
+    const configDefaults = {face:'luxe',brightness:72,volume:55,doNotDisturb:false,assistantEnabled:true,wakeWord:'小智小智',language:'zh-CN',complications:{weather:true,steps:true,battery:true}};
+    let config = {...configDefaults};
+    let page = 'face';
+    let voiceTimer = null;
+    let voiceStep = 0;
+    let gestureStart = null;
+    let musicTrack = 0;
+    let musicPlaying = false;
+    let alarmTime = '07:00';
+    let alarmEnabled = false;
+    let timerEndsAt = 0;
+    let timerInterval = null;
+    const demoMusicTitles = ['清晨微光','海风来信','星夜漫步'];
+    const screen = document.querySelector('#watchScreen');
+    const faceImage = document.querySelector('#faceImage');
+    const faceButtons = [...document.querySelectorAll('.face-option')];
+    const pageButtons = [...document.querySelectorAll('.page-btn')];
+    const faceIndex = () => Math.max(0, faces.findIndex(face => face.id === config.face));
+    function setFace(id, save = true) {
+      config.face = faces.some(face => face.id === id) ? id : 'luxe';
+      const face = faces[faceIndex()];
+      faceImage.src = face.src;
+      faceImage.alt = `${face.name}表盘`;
+      document.querySelector('#pageState').textContent = face.name;
+      faceButtons.forEach(button => button.classList.toggle('selected', button.dataset.face === face.id));
+      if (page === 'face') setPage('face');
+      if (save) persist();
+    }
+    function setPage(next) {
+      page = next;
+      faceImage.style.display = next === 'face' ? 'block' : 'none';
+      document.querySelector('#assistantPage').classList.toggle('visible', next === 'assistant');
+      document.querySelector('#activityPage').classList.toggle('visible', next === 'activity');
+      document.querySelector('#launcherPage').classList.toggle('visible', next === 'launcher');
+      document.querySelector('#quickPage').classList.toggle('visible', next === 'quick');
+      document.querySelector('#musicPage').classList.toggle('visible', next === 'music');
+      document.querySelector('#alarmPage').classList.toggle('visible', next === 'alarm');
+      document.querySelector('#timerPage').classList.toggle('visible', next === 'timer');
+      pageButtons.forEach(button => button.classList.toggle('active', button.dataset.page === next));
+      const pageNames = {face:faces[faceIndex()].name,launcher:'应用列表',assistant:'小智助手',activity:'活动',music:'音乐播放器',alarm:'每日闹钟',timer:'倒计时',quick:'快捷设置'};
+      document.querySelector('#pageState').textContent = pageNames[next];
+      const notes = {
+        assistant:'眼睛会移动和眨眼<br>点击「开始对话演示」查看回应状态',
+        launcher:'点击图标打开应用<br>按右侧表冠返回表盘',
+        music:'从示例曲库选歌<br>播放、暂停、上一首和下一首均可交互',
+        alarm:'选择每日闹钟时间<br>示例设置仅保存在当前模拟器会话',
+        timer:'启动 1、5 或 10 分钟倒计时<br>倒计时会在模拟器中实时更新',
+      };
+      document.querySelector('#gestureNote').innerHTML = notes[next] || '按手表右侧表冠打开应用列表<br>横向滑动切换表盘，向上滑动打开小智';
+      document.querySelector('#voiceDemo').textContent = next === 'assistant' ? '开始对话演示' : '打开小智助手';
+      if (next !== 'assistant') stopVoiceDemo();
+    }
+    function cycleFace(delta) { setFace(faces[(faceIndex() + delta + faces.length) % faces.length].id); }
+    async function persist() {
+      const saveState = document.querySelector('#saveState');
+      saveState.textContent = '正在保存…';
+      const payload = {...config,face:config.face,brightness:Number(document.querySelector('#brightness').value),volume:Number(document.querySelector('#volume').value),doNotDisturb:document.querySelector('#dnd').checked};
+      try {
+        const response = await fetch('/api/config',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || '保存失败');
+        config = result.config;
+        saveState.textContent = '配置已同步';
+      } catch (error) {
+        try {
+          localStorage.setItem('wave-watch-simulator-config', JSON.stringify(payload));
+          config = payload;
+          saveState.textContent = '预览配置已保存在本机';
+        } catch (_) { saveState.textContent = '本机存储不可用'; }
+      }
+    }
+    async function loadConfig() {
+      try {
+        const response = await fetch('/api/config');
+        if (!response.ok) throw new Error('配置不可用');
+        config = {...configDefaults,...await response.json()};
+      } catch (_) {
+        try {
+          config = {...configDefaults,...JSON.parse(localStorage.getItem('wave-watch-simulator-config') || '{}')};
+        } catch (_) {}
+      }
+      document.querySelector('#brightness').value = config.brightness;
+      document.querySelector('#volume').value = config.volume;
+      document.querySelector('#dnd').checked = config.doNotDisturb;
+      updateControls();
+      setFace(config.face,false);
+    }
+    function updateControls() {
+      const brightness = document.querySelector('#brightness').value;
+      const volume = document.querySelector('#volume').value;
+      document.querySelector('#brightnessOut').value = `${brightness}%`;
+      document.querySelector('#volumeOut').value = `${volume}%`;
+      document.querySelector('#screenBrightness').textContent = `${brightness}%`;
+      document.querySelector('#screenVolume').textContent = `${volume}%`;
+      document.querySelector('#screenDnd').textContent = document.querySelector('#dnd').checked ? '开启' : '关闭';
+      document.querySelector('#watchScreen').style.filter = `brightness(${0.48 + Number(brightness) / 190})`;
+    }
+    function renderMusic() {
+      const rows = [...document.querySelectorAll('.track-option')];
+      rows.forEach((row,index) => row.classList.toggle('selected', index === musicTrack));
+      document.querySelector('#musicTitle').textContent = demoMusicTitles[musicTrack];
+      document.querySelector('#musicStatus').textContent = musicPlaying ? '模拟播放中' : '已暂停';
+      document.querySelector('#musicToggle').textContent = musicPlaying ? 'Ⅱ 暂停' : '▶ 播放';
+    }
+    function changeMusic(delta) {
+      musicTrack = (musicTrack + delta + 3) % 3;
+      musicPlaying = true;
+      renderMusic();
+    }
+    function renderAlarm() {
+      document.querySelector('#alarmTime').textContent = alarmTime;
+      document.querySelector('#alarmState').textContent = alarmEnabled ? '闹钟已开启' : '闹钟已关闭';
+      document.querySelector('#alarmBadge').textContent = alarmEnabled ? '已启用' : '每日重复';
+      document.querySelector('#alarmToggle').textContent = alarmEnabled ? '关闭闹钟' : '开启闹钟';
+      document.querySelector('#screenAlarm').textContent = alarmEnabled ? alarmTime : '关闭';
+    }
+    function renderTimer() {
+      if (!timerEndsAt) return;
+      const seconds = Math.max(0, Math.ceil((timerEndsAt - Date.now()) / 1000));
+      document.querySelector('#timerValue').textContent = `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`;
+      if (seconds === 0) {
+        timerEndsAt = 0;
+        clearInterval(timerInterval);
+        timerInterval = null;
+        document.querySelector('#timerState').textContent = '倒计时结束';
+      }
+    }
+    function startTimer(seconds) {
+      timerEndsAt = Date.now() + seconds * 1000;
+      document.querySelector('#timerState').textContent = '模拟倒计时运行中';
+      if (timerInterval) clearInterval(timerInterval);
+      renderTimer();
+      timerInterval = setInterval(renderTimer,250);
+    }
+    function cancelTimer() {
+      timerEndsAt = 0;
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = null;
+      document.querySelector('#timerValue').textContent = '00:00';
+      document.querySelector('#timerState').textContent = '已取消';
+    }
+    function stopVoiceDemo() {
+      if (voiceTimer) clearInterval(voiceTimer);
+      voiceTimer = null;
+      document.querySelector('#voiceDemo').textContent = '开始对话演示';
+      document.querySelector('#assistantPage').classList.remove('listening','speaking');
+      document.querySelector('#voiceStatus').textContent = '待机';
+      document.querySelector('#assistantText').textContent = '你好，我在这里';
+    }
+    function startVoiceDemo() {
+      if (voiceTimer) { stopVoiceDemo(); return; }
+      setPage('assistant');
+      voiceStep = 0;
+      document.querySelector('#voiceDemo').textContent = '结束演示';
+      const assistant = document.querySelector('#assistantPage');
+      const stages = [
+        ['listening','聆听中','播放 SD 卡里的海风来信'],
+        ['','正在处理','正在搜索 SD 卡曲库…'],
+        ['speaking','小智正在回答','已经为你播放《海风来信》'],
+      ];
+      const update = () => {
+        const [state,status,message] = stages[voiceStep++ % stages.length];
+        assistant.classList.toggle('listening',state === 'listening');
+        assistant.classList.toggle('speaking',state === 'speaking');
+        document.querySelector('#voiceStatus').textContent = status;
+        document.querySelector('#assistantText').textContent = message;
+        if (state === 'speaking') {
+          musicTrack = 1;
+          musicPlaying = true;
+          renderMusic();
+          clearInterval(voiceTimer);
+          voiceTimer = null;
+          document.querySelector('#voiceDemo').textContent = '重新演示';
+        }
+      };
+      update();
+      voiceTimer = setInterval(update,1600);
+    }
+    faceButtons.forEach(button => button.addEventListener('click',() => setFace(button.dataset.face)));
+    document.querySelector('#prevFace').addEventListener('click',() => cycleFace(-1));
+    document.querySelector('#nextFace').addEventListener('click',() => cycleFace(1));
+    document.querySelector('#faceImage').addEventListener('click',() => cycleFace(1));
+    document.querySelector('#crownButton').addEventListener('click',() => {
+      if (page === 'face') setPage('launcher');
+      else if (page === 'launcher') setPage('face');
+      else setPage('launcher');
+    });
+    document.querySelectorAll('[data-launch]').forEach(button => button.addEventListener('click',() => {
+      setPage(button.dataset.launch);
+    }));
+    document.querySelector('#voiceDemo').addEventListener('click',() => page === 'assistant' ? startVoiceDemo() : setPage('assistant'));
+    pageButtons.forEach(button => button.addEventListener('click',() => setPage(button.dataset.page)));
+    document.querySelectorAll('.track-option').forEach(button => button.addEventListener('click',() => {
+      musicTrack = Number(button.dataset.track);
+      musicPlaying = true;
+      renderMusic();
+    }));
+    document.querySelector('#musicPrev').addEventListener('click',() => changeMusic(-1));
+    document.querySelector('#musicNext').addEventListener('click',() => changeMusic(1));
+    document.querySelector('#musicToggle').addEventListener('click',() => { musicPlaying = !musicPlaying; renderMusic(); });
+    document.querySelectorAll('[data-alarm]').forEach(button => button.addEventListener('click',() => {
+      alarmTime = button.dataset.alarm;
+      alarmEnabled = true;
+      renderAlarm();
+    }));
+    document.querySelector('#alarmToggle').addEventListener('click',() => { alarmEnabled = !alarmEnabled; renderAlarm(); });
+    document.querySelectorAll('[data-timer]').forEach(button => button.addEventListener('click',() => startTimer(Number(button.dataset.timer))));
+    document.querySelector('#timerCancel').addEventListener('click',cancelTimer);
+    document.querySelector('#brightness').addEventListener('input',updateControls);
+    document.querySelector('#brightness').addEventListener('change',persist);
+    document.querySelector('#volume').addEventListener('input',updateControls);
+    document.querySelector('#volume').addEventListener('change',persist);
+    document.querySelector('#dnd').addEventListener('change',() => {updateControls();persist();});
+    screen.addEventListener('pointerdown',event => { gestureStart = {x:event.clientX,y:event.clientY}; });
+    screen.addEventListener('pointerup',event => {
+      if (!gestureStart) return;
+      const dx = event.clientX - gestureStart.x, dy = event.clientY - gestureStart.y;
+      gestureStart = null;
+      if (Math.max(Math.abs(dx),Math.abs(dy)) < 35) return;
+      if (Math.abs(dx) > Math.abs(dy)) cycleFace(dx < 0 ? 1 : -1);
+      else if (dy < 0) setPage('assistant');
+      else setPage('activity');
+    });
+    const now = new Date();
+    const week = ['日','一','二','三','四','五','六'];
+    const dateText = `${now.getMonth()+1}月${now.getDate()}日 周${week[now.getDay()]}`;
+    document.querySelector('#activityDate').textContent = dateText;
+    document.querySelector('#activityTime').textContent = now.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});
+    renderMusic();
+    renderAlarm();
+    loadConfig();
+  </script>
+</body>
+</html>

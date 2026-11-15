@@ -1,0 +1,23 @@
+# Build outputs
+build/
+host-sim/build/
+host-sim/generated/
+
+# ESP-IDF managed components are re-fetched from dependencies.lock
+firmware/xiaozhi-esp32/managed_components/
+
+# Local device/config state (contains tokens and your own settings)
+config-portal/data/watch-config.json
+config-portal/data/device-session.json
+
+# macOS
+.DS_Store
+
+# Source media that is not needed to build the firmware (kept locally)
+whale-mascot-animation/
+assets/whale-cutout.gif
+assets/app-icons-3x3-cropped.zip
+assets/watch-app-icons-3x3*.png
+
+# Host simulator artefacts
+host-sim/shim/*.o
