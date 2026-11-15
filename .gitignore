@@ -21,3 +21,6 @@ assets/watch-app-icons-3x3*.png
 
 # Host simulator artefacts
 host-sim/shim/*.o
+
+# Built macOS app bundle
+tools/watch-media-converter/dist/

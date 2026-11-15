@@ -158,9 +158,9 @@ ffmpeg -i in.mp4 -vf "scale=320:240:force_original_aspect_ratio=decrease,fps=15"
 
 ## 媒体压缩工具
 
-[`tools/watch-media-converter`](tools/watch-media-converter/README.md) 是配套的批量压缩工具（图形界面 + 命令行，依赖 `ffmpeg`）：
+[`tools/watch-media-converter`](tools/watch-media-converter/README.md) 是配套的批量压缩工具（原生 macOS App + 命令行，依赖 `ffmpeg`）：
 
-- 双击 `启动压缩工具.command` 选文件夹即可；
+- 双击 `WAVE 媒体压缩.app`（`app/build-app.sh` 构建，拖放文件夹即可）；
 - 照片 → baseline JPEG（≤ 240,000 像素，自动摆正方向、HEIC 支持）；
 - 视频 → MJPEG AVI（320×240 / 15 fps / 去音轨）；
 - 输出直接生成 `Photos/` 和 `Video/` 两个目录，拷到 TF 卡根目录即可。
@@ -209,7 +209,7 @@ firmware/xiaozhi-esp32/      固件（ESP-IDF 工程）
   scripts/build.py           构建封装（板型/语言/唤醒词）
 host-sim/                    桌面 UI 模拟器（从固件源码抽取界面类，LVGL + SDL）
 config-portal/               浏览器配置中心（Node.js）
-tools/watch-media-converter/ 照片/视频批量压缩工具（ffmpeg）
+tools/watch-media-converter/ 照片/视频批量压缩工具（原生 macOS App + CLI，ffmpeg）
 assets/app-icons/            九宫格图标源文件（透明 PNG）
 assets/whale-girl.png        表盘鲸鱼插画源文件
 scripts/                     图标/插画生成、串口日志抓取

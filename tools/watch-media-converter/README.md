@@ -1,9 +1,28 @@
 # 手表媒体压缩工具
 
 把手机/电脑里的照片和视频，批量压成 **WAVE AI Watch 能流畅查看** 的格式。
-双击 `启动压缩工具.command` 打开图形界面，或者用命令行批量处理。
 
-> 依赖：`ffmpeg`（`brew install ffmpeg`）。图形界面用 macOS 自带的 `/usr/bin/python3`，不需要装 Python 包。
+## macOS App（推荐）
+
+原生 Swift/AppKit 应用，双击即用，支持拖放文件夹：
+
+- 构建好的 App：`tools/watch-media-converter/dist/WAVE 媒体压缩.app`（构建产物不进仓库）
+- 重新构建：`cd app && ./build-app.sh`
+- 使用：把照片/视频文件夹拖进窗口 → 选输出目录 → 选预设 → 「开始转换」→「在 Finder 中显示」
+
+App 只依赖系统里的 `ffmpeg`；照片/视频的转换参数与下面的 CLI 完全一致。
+命令行模式（便于脚本化）：
+
+```sh
+"dist/WAVE 媒体压缩.app/Contents/MacOS/WaveMediaConverter" \
+    --cli --input ~/Pictures/旅行 --output ~/Desktop/watch-media --preset standard
+```
+
+> 依赖：`ffmpeg`（`brew install ffmpeg`）。App 为 arm64、ad-hoc 签名；从网上下载的包首次打开如被拦截，右键 → 打开 即可。
+
+## 命令行 / 旧版（Python 版 GUI）
+
+`启动压缩工具.command` 仍保留：它用 macOS 自带的 `/usr/bin/python3`（带 Tkinter）跑同参数的 GUI，不需要装 Python 包。
 
 ## 手表支持的格式与尺寸
 
