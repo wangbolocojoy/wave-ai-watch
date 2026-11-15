@@ -165,7 +165,7 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     // Equal priority with the music task: the RTOS time slice keeps both the
     // UI and the I2S feed alive during expensive page rebuilds.
-    port_cfg.task_priority = 2;
+    port_cfg.task_priority = 4;
 #if CONFIG_SOC_CPU_CORES_NUM > 1
     port_cfg.task_affinity = 1;
 #endif
@@ -180,6 +180,8 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
         .panel_handle = panel_,
         .control_handle = nullptr,
         .buffer_size = static_cast<uint32_t>(width_ * 20),
+        // A second buffer costs 16 KB of internal SRAM and pushed the PHY init
+        // into an allocation failure; keep a single buffer.
         .double_buffer = false,
         .trans_size = 0,
         .hres = static_cast<uint32_t>(width_),

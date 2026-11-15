@@ -14,7 +14,9 @@
                 "CONFIG_CUSTOM_WAKE_WORD_DISPLAY=\"你好大肥鱼\"",
                 "CONFIG_CUSTOM_WAKE_WORD_ALT=\"hai da fei yu\"",
                 "CONFIG_CUSTOM_WAKE_WORD_ALT_DISPLAY=\"嗨大肥鱼\"",
-                "CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=25"
+                "CONFIG_CUSTOM_WAKE_WORD_THRESHOLD=25",
+                "CONFIG_LV_DEF_REFR_PERIOD=16",
+                "CONFIG_LV_INDEV_DEF_READ_PERIOD=16"
             ]
         }
     ]

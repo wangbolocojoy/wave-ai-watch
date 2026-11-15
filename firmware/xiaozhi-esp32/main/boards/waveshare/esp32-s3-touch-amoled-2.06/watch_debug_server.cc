@@ -330,13 +330,13 @@ void WatchDebugServer::Start() {
     if (server != nullptr)
         return;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    // The default 4 KB httpd stack is too small for the JPEG screenshot path
-    // (Task Watchdog caught "stack overflow in task httpd").
-    config.stack_size = 10240;
+    // The JPEG screenshot path walks the whole LVGL object tree; 10 KB was
+    // still too small for complex pages (music list) and the watchdog killed
+    // the httpd task. Match the config service's 16 KB.
+    config.stack_size = 16384;
     config.server_port = kPort;
     config.max_uri_handlers = 12;
     config.lru_purge_enable = true;
-    config.stack_size = 6144;
     if (httpd_start(&server, &config) != ESP_OK) {
         server = nullptr;
         ESP_LOGW(kTag, "Unable to start debug server on port %d", kPort);

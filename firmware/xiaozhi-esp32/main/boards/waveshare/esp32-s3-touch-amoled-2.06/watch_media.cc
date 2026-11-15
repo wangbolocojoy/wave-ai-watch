@@ -33,6 +33,9 @@ constexpr char kTag[] = "WatchMedia";
         .perf_type = ESP_AE_RATE_CVT_PERF_TYPE_SPEED                             \
     }
 
+// The AVI audio track is pushed through the same PCM queue as music.
+constexpr uint32_t kVideoAudioSource = 0x5649444F;  // 'VIDO'
+
 // Bumped on every playback so queued video audio can be invalidated.
 std::atomic<uint32_t> video_audio_generation_{0};
 
@@ -286,7 +289,12 @@ bool VideoPlayer::Play(const std::string& path, FrameCallback on_frame) {
     return true;
 }
 
-void VideoPlayer::Stop() { stop_requested_.store(true); }
+void VideoPlayer::Stop() {
+    stop_requested_.store(true);
+    // Invalidate any queued video audio so a blocked push returns immediately.
+    Application::GetInstance().GetAudioService().SetPcmPlaybackSourceGeneration(
+        kVideoAudioSource, ++video_audio_generation_);
+}
 
 void VideoPlayer::TaskEntry(void* context) {
     auto* job = static_cast<Job*>(context);
@@ -385,7 +393,6 @@ void VideoPlayer::Run(Job job) {
 
     auto& audio = Application::GetInstance().GetAudioService();
     const uint32_t audio_generation = ++video_audio_generation_;
-    constexpr uint32_t kVideoAudioSource = 0x5649444F;  // 'VIDO'
     const bool has_audio = audio_channels > 0 && audio_sample_rate >= 8000 && audio_bits == 16;
     esp_ae_rate_cvt_handle_t resampler = nullptr;
     if (has_audio) {

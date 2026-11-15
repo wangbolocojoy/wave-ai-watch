@@ -305,8 +305,8 @@ private:
     static constexpr int kMusicRowHeight = 42;
     static constexpr int kMusicRowGap = 4;
     static constexpr int kMusicRowStride = kMusicRowHeight + kMusicRowGap;
-    static constexpr int kMusicWindowRows = 72;
-    static constexpr int kMusicPreloadRows = 12;
+    static constexpr int kMusicWindowRows = 32;
+    static constexpr int kMusicPreloadRows = 8;
     lv_obj_t* watch_music_list_ = nullptr;
     lv_timer_t* music_list_timer_ = nullptr;
     int music_list_first_ = 0;
@@ -2996,6 +2996,8 @@ private:
     void OpenVideoPlayer(size_t index) {
         if (index >= media_entries_.size())
             return;
+        // AVI audio and the music player share one PCM queue; stop music first.
+        WatchMusicPlayer::GetInstance().Stop();
         OpenPage(media_entries_[index].name.c_str(), kOpenVideos);
         media_video_mode_ = true;
         video_dsc_ = {};
@@ -4006,6 +4008,8 @@ public:
             OpenVoiceMemoPage();
         else if (name == "音乐")
             OpenMusicPage();
+        else if (name == "歌曲" || name == "列表" || name == "曲库")
+            OpenMusicListPage();
         else if (name == "播放音乐") {
             Application::GetInstance().Schedule(
                 [] { WatchMusicPlayer::GetInstance().PlayOrResume(); });
