@@ -14,11 +14,27 @@
 #include <freertos/idf_additions.h>
 #include <freertos/task.h>
 
+#include <esp_timer.h>
+
+#include "application.h"
+#include "audio_service.h"
+#include "board.h"
+#include "esp_ae_rate_cvt.h"
 #include "jpeg_decoder.h"
 #include "esp_jpeg_dec.h"
 
 namespace {
 constexpr char kTag[] = "WatchMedia";
+
+#define RATE_CVT_CFG(src, dst)                                                   \
+    (esp_ae_rate_cvt_cfg_t) {                                                    \
+        .src_rate = (uint32_t)(src), .dest_rate = (uint32_t)(dst), .channel = 1, \
+        .bits_per_sample = ESP_AUDIO_BIT16, .complexity = 2,                     \
+        .perf_type = ESP_AE_RATE_CVT_PERF_TYPE_SPEED                             \
+    }
+
+// Bumped on every playback so queued video audio can be invalidated.
+std::atomic<uint32_t> video_audio_generation_{0};
 
 std::string Lower(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -300,6 +316,12 @@ void VideoPlayer::Run(Job job) {
 
     int micro_per_frame = 0;
     long movi_offset = -1;
+    // Audio stream discovered in the hdrl lists. The scan treats LIST chunks as
+    // transparent so nested strl/strh/strf are seen without a recursive parser.
+    int audio_channels = 0;
+    int audio_sample_rate = 0;
+    int audio_bits = 0;
+    bool current_stream_is_audio = false;
     uint8_t chunk[8] = {};
     while (!stop_requested_.load() && std::fread(chunk, 1, sizeof(chunk), file) == sizeof(chunk)) {
         const uint32_t size = ReadLe32(chunk + 4);
@@ -311,18 +333,43 @@ void VideoPlayer::Run(Job job) {
                 movi_offset = std::ftell(file);
                 break;
             }
-            std::fseek(file, static_cast<long>(size) - 4, SEEK_CUR);
-        } else if (std::memcmp(chunk, "avih", 4) == 0) {
+            continue;
+        }
+        if (std::memcmp(chunk, "avih", 4) == 0) {
             uint8_t header[40] = {};
             const size_t want = std::min<size_t>(size, sizeof(header));
             if (std::fread(header, 1, want, file) != want)
                 break;
             micro_per_frame = static_cast<int>(ReadLe32(header));
             std::fseek(file, static_cast<long>(size - want), SEEK_CUR);
-        } else {
-            std::fseek(file, static_cast<long>(size) + (size & 1), SEEK_CUR);
+            continue;
         }
+        if (std::memcmp(chunk, "strh", 4) == 0) {
+            uint8_t stream_header[8] = {};
+            const size_t want = std::min<size_t>(size, sizeof(stream_header));
+            if (std::fread(stream_header, 1, want, file) != want)
+                break;
+            current_stream_is_audio = std::memcmp(stream_header, "auds", 4) == 0;
+            std::fseek(file, static_cast<long>(size - want), SEEK_CUR);
+            continue;
+        }
+        if (std::memcmp(chunk, "strf", 4) == 0 && current_stream_is_audio && size >= 16) {
+            uint8_t format[18] = {};
+            const size_t want = std::min<size_t>(size, sizeof(format));
+            if (std::fread(format, 1, want, file) != want)
+                break;
+            const uint16_t format_tag = static_cast<uint16_t>(ReadLe32(format) & 0xFFFF);
+            audio_channels = format[2] | (format[3] << 8);
+            audio_sample_rate = static_cast<int>(ReadLe32(format + 4));
+            audio_bits = format[14] | (format[15] << 8);
+            if (format_tag != 1)  // only linear PCM is supported
+                audio_channels = 0;
+            std::fseek(file, static_cast<long>(size - want), SEEK_CUR);
+            continue;
+        }
+        std::fseek(file, static_cast<long>(size) + (size & 1), SEEK_CUR);
     }
+
     fps_ = micro_per_frame > 0 ? static_cast<int>(1000000 / micro_per_frame) : 15;
     fps_ = std::clamp(fps_, 1, 30);
     if (movi_offset < 0) {
@@ -333,33 +380,105 @@ void VideoPlayer::Run(Job job) {
     }
     std::fseek(file, movi_offset, SEEK_SET);
     const int frame_delay = 1000 / fps_;
-    ESP_LOGI(kTag, "Video %s at %d fps", job.path.c_str(), fps_);
+    ESP_LOGI(kTag, "Video %s at %d fps, audio %d Hz %d ch %d bit", job.path.c_str(), fps_,
+             audio_sample_rate, audio_channels, audio_bits);
+
+    auto& audio = Application::GetInstance().GetAudioService();
+    const uint32_t audio_generation = ++video_audio_generation_;
+    constexpr uint32_t kVideoAudioSource = 0x5649444F;  // 'VIDO'
+    const bool has_audio = audio_channels > 0 && audio_sample_rate >= 8000 && audio_bits == 16;
+    esp_ae_rate_cvt_handle_t resampler = nullptr;
+    if (has_audio) {
+        const int output_rate = Board::GetInstance().GetAudioCodec()->output_sample_rate();
+        if (audio_sample_rate != output_rate) {
+            auto config = RATE_CVT_CFG(audio_sample_rate, output_rate);
+            if (esp_ae_rate_cvt_open(&config, &resampler) != ESP_AE_ERR_OK) {
+                ESP_LOGW(kTag, "Video audio resampler unavailable, playing silently");
+            }
+        }
+        audio.SetPcmPlaybackSourceGeneration(kVideoAudioSource, audio_generation);
+        audio.SetPcmPlaybackSourcePaused(kVideoAudioSource, false);
+    }
 
     jpeg_dec_config_t config = DEFAULT_JPEG_DEC_CONFIG();
     config.output_type = JPEG_PIXEL_FORMAT_RGB565_LE;
     jpeg_dec_handle_t decoder = nullptr;
     if (jpeg_dec_open(&config, &decoder) != JPEG_ERR_OK) {
         ESP_LOGW(kTag, "Unable to open JPEG decoder");
+        if (resampler != nullptr)
+            esp_ae_rate_cvt_close(resampler);
         std::fclose(file);
         playing_.store(false);
         return;
     }
 
     std::vector<uint8_t> frame;
+    std::vector<uint8_t> audio_chunk;
+    std::vector<int16_t> audio_pcm;
     uint8_t* pixels = nullptr;
     size_t pixels_capacity = 0;
     int frame_width = 0;
     int frame_height = 0;
+    int frame_index = 0;
+    const int64_t start_us = esp_timer_get_time();
     while (!stop_requested_.load()) {
         if (std::fread(chunk, 1, sizeof(chunk), file) != sizeof(chunk))
             break;
         const uint32_t size = ReadLe32(chunk + 4);
         const bool is_frame = chunk[0] == '0' && chunk[1] == '0' && chunk[2] == 'd' &&
                               chunk[3] >= 'b' && chunk[3] <= 'c';
-        if (!is_frame) {
+        const bool is_audio = chunk[2] == 'w' && chunk[3] == 'b';
+        if (!is_frame && !is_audio) {
             if (std::memcmp(chunk, "idx1", 4) == 0)
                 break;
             std::fseek(file, static_cast<long>(size) + (size & 1), SEEK_CUR);
+            continue;
+        }
+        if (is_audio) {
+            if (!has_audio || size < 2 || size > 256 * 1024) {
+                std::fseek(file, static_cast<long>(size) + (size & 1), SEEK_CUR);
+                continue;
+            }
+            audio_chunk.resize(size);
+            if (std::fread(audio_chunk.data(), 1, size, file) != size)
+                break;
+            if (size & 1)
+                std::fseek(file, 1, SEEK_CUR);
+            auto* samples = reinterpret_cast<const int16_t*>(audio_chunk.data());
+            const size_t sample_count = size / 2;
+            audio_pcm.resize(sample_count);
+            if (audio_channels == 1) {
+                std::memcpy(audio_pcm.data(), samples, size);
+            } else {
+                // Downmix to mono: the watch plays a single channel.
+                const size_t frames = sample_count / static_cast<size_t>(audio_channels);
+                audio_pcm.resize(frames);
+                for (size_t i = 0; i < frames; ++i) {
+                    int sum = 0;
+                    for (int channel = 0; channel < audio_channels; ++channel)
+                        sum += samples[i * static_cast<size_t>(audio_channels) + channel];
+                    audio_pcm[i] = static_cast<int16_t>(sum / audio_channels);
+                }
+            }
+            if (resampler != nullptr) {
+                uint32_t capacity = 0;
+                esp_ae_rate_cvt_get_max_out_sample_num(
+                    resampler, static_cast<uint32_t>(audio_pcm.size()), &capacity);
+                if (capacity > 0) {
+                    std::vector<int16_t> converted(capacity);
+                    uint32_t actual = capacity;
+                    if (esp_ae_rate_cvt_process(
+                            resampler, static_cast<esp_ae_sample_t>(audio_pcm.data()),
+                            static_cast<uint32_t>(audio_pcm.size()),
+                            static_cast<esp_ae_sample_t>(converted.data()), &actual) == ESP_AE_ERR_OK &&
+                        actual > 0) {
+                        converted.resize(actual);
+                        audio_pcm.swap(converted);
+                    }
+                }
+            }
+            // Blocking push paces the reader to real playback speed.
+            audio.PushPcmFromSource(std::move(audio_pcm), kVideoAudioSource, audio_generation, true);
             continue;
         }
         if (size < 64 || size > 2 * 1024 * 1024) {
@@ -409,8 +528,20 @@ void VideoPlayer::Run(Job job) {
         frame_height = static_cast<int>(info.height);
         if (job.on_frame)
             job.on_frame(pixels, frame_width, frame_height);
-        vTaskDelay(pdMS_TO_TICKS(frame_delay));
+
+        // Keep video on its own timeline; audio pushes above provide back-pressure.
+        ++frame_index;
+        const int64_t target_us = start_us + static_cast<int64_t>(frame_index) * 1000000 / fps_;
+        const int64_t remaining_us = target_us - esp_timer_get_time();
+        if (remaining_us > 1000)
+            vTaskDelay(pdMS_TO_TICKS(static_cast<uint32_t>((remaining_us + 999) / 1000)));
     }
+    if (has_audio) {
+        audio.SetPcmPlaybackSourcePaused(kVideoAudioSource, true);
+        audio.SetPcmPlaybackSourceGeneration(kVideoAudioSource, audio_generation + 1);
+    }
+    if (resampler != nullptr)
+        esp_ae_rate_cvt_close(resampler);
     jpeg_dec_close(decoder);
     std::fclose(file);
     if (pixels != nullptr)

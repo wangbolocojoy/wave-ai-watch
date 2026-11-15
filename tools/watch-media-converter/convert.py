@@ -141,7 +141,10 @@ def convert_video(source: Path, destination: Path, preset: Preset, log) -> tuple
         "-c:v", "mjpeg",
         "-q:v", str(preset.video_quality),
         "-pix_fmt", "yuvj420p",
-        "-an",
+        # 音频保留为 16 kHz 单声道 PCM：手表逐块喂给 ES8311 播放
+        "-c:a", "pcm_s16le",
+        "-ar", "16000",
+        "-ac", "1",
         "-map_metadata", "-1",
         "-f", "avi",
         str(temp_output),

@@ -51,7 +51,7 @@
 | **音乐** | 扫描 TF 卡 `/Music` 的 MP3/WAV（实测 944 首）；整列滚动 + 窗口懒加载，控件数量不随曲库增长；播放/暂停/上下曲/随机；支持语音"播放第 N 首"；助手误唤醒时自动暂停、回复后自动继续 |
 | **录音** | 一键录音，16 kHz WAV 存 `/Recordings`；列表按时间排序，点按播放/停止 |
 | **图片** | 全屏浏览 `/Photos` 的 JPG，超出解码预算自动 1/2、1/4 缩放；左右轻点切换 |
-| **视频** | 播放 `/Video` 的 MJPEG 编码 AVI，按文件帧率逐帧软解到 PSRAM |
+| **视频** | 播放 `/Video` 的 MJPEG 编码 AVI，按文件帧率逐帧软解到 PSRAM；**带 16 kHz 单声道 PCM 音轨时会同步播放声音** |
 | **活动** | QMI8658 计步，环形目标进度 |
 | **闹钟/倒计时** | 手表上设置，也能语音操作；闹钟到点唤醒 |
 | **设置** | 表盘、亮度、音量、勿扰、WiFi、语音唤醒开关、关于本机 |
@@ -134,7 +134,7 @@ python -m esptool --chip esp32s3 -p /dev/cu.usbmodem2101 -b 921600 \
 ```text
 /Music       音乐：.mp3 / .wav
 /Photos      图片：.jpg（baseline JPEG，像素数 ≤ 240,000，如 480×500 / 640×375）
-/Video       视频：.avi（MJPEG 编码，≤ 320×240，12~15 fps，无音轨）
+/Video       视频：.avi（MJPEG 编码，≤ 320×240，12~15 fps，可带 16 kHz 单声道 PCM 音轨）
 /Recordings  语音备忘：.wav（16 kHz，手表自己生成）
 ```
 
@@ -143,7 +143,7 @@ python -m esptool --chip esp32s3 -p /dev/cu.usbmodem2101 -b 921600 \
 | 媒体 | 关键要求 | 原因 |
 |---|---|---|
 | 照片 | **baseline JPEG**（不能 progressive）、像素数 ≤ 240,000、方向已摆正 | 解码缓冲 480 KB ÷ 2 字节/像素；固件不读 EXIF |
-| 视频 | **MJPEG 编码的 AVI**、≤ 320×240、12~15 fps、无音轨 | ESP32-S3 无 H.264 硬解，逐帧软解只跑得动 MJPEG |
+| 视频 | **MJPEG 编码的 AVI**、≤ 320×240、12~15 fps；音轨只支持 **16 kHz 单声道 16-bit PCM** | ESP32-S3 无 H.264 硬解；音频走 ES8311，PCM 最省事 |
 
 手写 ffmpeg 转换命令：
 
@@ -151,9 +151,9 @@ python -m esptool --chip esp32s3 -p /dev/cu.usbmodem2101 -b 921600 \
 # 照片：缩到 480 盒内 + 标准 4:2:0 baseline JPEG
 ffmpeg -i in.jpg -vf "scale=480:480:force_original_aspect_ratio=decrease,format=yuvj420p" -q:v 4 out.jpg
 
-# 视频：320×240 以内、15fps、MJPEG、去音轨
+# 视频：320×240 以内、15fps、MJPEG + 16kHz 单声道 PCM 音轨
 ffmpeg -i in.mp4 -vf "scale=320:240:force_original_aspect_ratio=decrease,fps=15" \
-       -c:v mjpeg -q:v 7 -pix_fmt yuvj420p -an -f avi out.avi
+       -c:v mjpeg -q:v 7 -pix_fmt yuvj420p -c:a pcm_s16le -ar 16000 -ac 1 -f avi out.avi
 ```
 
 ## 媒体压缩工具
@@ -162,7 +162,7 @@ ffmpeg -i in.mp4 -vf "scale=320:240:force_original_aspect_ratio=decrease,fps=15"
 
 - 双击 `WAVE 媒体压缩.app`（`app/build-app.sh` 构建，拖放文件夹即可）；
 - 照片 → baseline JPEG（≤ 240,000 像素，自动摆正方向、HEIC 支持）；
-- 视频 → MJPEG AVI（320×240 / 15 fps / 去音轨）；
+- 视频 → MJPEG AVI（320×240 / 15 fps / 保留 16 kHz 单声道 PCM 音轨）；
 - 输出直接生成 `Photos/` 和 `Video/` 两个目录，拷到 TF 卡根目录即可。
 
 实测：20 张 3024×4032 照片 + 30 秒 1080p 视频 → 合计 **1.1 MB**，6 秒转完。
@@ -260,7 +260,7 @@ cd host-sim
 ## 已知限制
 
 - **语音依赖云端**：对话走小智协议（默认官方云），断网只能用本地功能。
-- **视频无声音**：只解码画面，音轨未实现。
+- **视频音频格式**：只支持 16 kHz 单声道 16-bit PCM 音轨（转换工具默认就是这个）。
 - **图片仅 JPG**：不支持 PNG/HEIC（用压缩工具转换）。
 - **视频仅 MJPEG**：ESP32-S3 没有 H.264 硬解。
 - **内部 SRAM 紧张**：新功能请避免在内部 RAM 分配大缓冲，见上文。
@@ -270,7 +270,6 @@ cd host-sim
 
 ## 路线图
 
-- [ ] 视频音轨（PCM/Opus 同步）
 - [ ] 图片缩略图列表 + PNG 支持
 - [ ] 音乐 ID3 标签、封面、播放列表、锁屏后台播放
 - [ ] AOD 真正低功耗（息屏停麦/停唤醒词 + 轻睡眠）

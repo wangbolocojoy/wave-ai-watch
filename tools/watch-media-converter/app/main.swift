@@ -2,7 +2,7 @@
 //
 // 原生 macOS 应用（AppKit），无第三方依赖，只调用系统里的 ffmpeg。
 // 照片 → baseline JPEG（≤512 盒 / ≤240,000 像素）
-// 视频 → MJPEG AVI（320×240 / 15 fps / 无音轨）
+// 视频 → MJPEG AVI（320×240 / 15 fps / 16 kHz 单声道 PCM 音轨）
 //
 // 构建：见同目录 build-app.sh
 // 命令行：WaveMediaConverter --cli --input <路径> --output <路径> --preset standard
@@ -232,7 +232,9 @@ final class MediaConverter {
             "-c:v", "mjpeg",
             "-q:v", String(preset.videoQuality),
             "-pix_fmt", "yuvj420p",
-            "-an", "-map_metadata", "-1",
+            // 音频保留为 16 kHz 单声道 PCM，手表会和画面一起播放
+            "-c:a", "pcm_s16le", "-ar", "16000", "-ac", "1",
+            "-map_metadata", "-1",
             "-f", "avi",
             target.path,
         ])
