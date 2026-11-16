@@ -1822,6 +1822,9 @@ private:
             return;
         ESP_LOGI(TAG, "watch_page_open=%s", title);
         ReleaseWatchPageHandles();
+        // A voice session hides watch_layer_; without this the page opened by an
+        // MCP tool (e.g. "出示收款码") stayed invisible behind a blank screen.
+        lv_obj_clear_flag(watch_layer_, LV_OBJ_FLAG_HIDDEN);
         if (watch_page_ != nullptr)
             lv_obj_delete(watch_page_);
         watch_page_ = nullptr;
@@ -5046,6 +5049,12 @@ private:
                     if (lock)
                         watch->DebugOpenPayment(code);
                 });
+                // Showing a QR is the whole point of the request: end the voice
+                // session so the assistant overlay does not cover the code.
+                auto& app = Application::GetInstance();
+                app.StopListening();
+                app.AbortSpeaking(kAbortReasonNone);
+                app.SetDeviceState(kDeviceStateIdle);
                 return std::string("已在手表上出示收款码") + (code.empty() ? "" : ("：" + code));
             });
         AddLoggedWatchTool(mcp_server, "self.watch.pay.list",
@@ -5082,6 +5091,10 @@ private:
                     if (lock)
                         watch->DebugOpenCard(code);
                 });
+                auto& app = Application::GetInstance();
+                app.StopListening();
+                app.AbortSpeaking(kAbortReasonNone);
+                app.SetDeviceState(kDeviceStateIdle);
                 return std::string("已在手表上打开个人名片") + (code.empty() ? "" : ("：" + code));
             });
         AddLoggedWatchTool(mcp_server, "self.watch.card.list",
