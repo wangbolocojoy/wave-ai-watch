@@ -3181,11 +3181,22 @@ private:
         // oversized screenshots are downscaled to fit. Cap at 2x to avoid blur.
         const uint32_t scale_x = static_cast<uint32_t>(396 * 256) / static_cast<uint32_t>(width);
         const uint32_t scale_y = static_cast<uint32_t>(432 * 256) / static_cast<uint32_t>(height);
-        const uint32_t scale =
-            std::min<uint32_t>(512u, std::max<uint32_t>(256u, std::min(scale_x, scale_y)));
+        // Fit inside the viewport: downscale tall/wide screenshots (this is what
+        // kept showing only a blank white slice) and allow a mild upscale for
+        // small cropped QR codes.
+        uint32_t scale = std::min(scale_x, scale_y);
+        scale = std::min<uint32_t>(512u, std::max<uint32_t>(64u, scale));
         if (scale != 256)
             lv_image_set_scale(image, scale);
+        // The image widget must be sized to the *scaled* dimensions, otherwise
+        // LVGL clips it to the unscaled size (an upscaled QR showed only a blank
+        // white corner).
+        lv_obj_set_size(image,
+                        static_cast<int32_t>((static_cast<uint32_t>(width) * scale) / 256),
+                        static_cast<int32_t>((static_cast<uint32_t>(height) * scale) / 256));
         lv_obj_align(image, LV_ALIGN_CENTER, 0, 6);
+        ESP_LOGI(TAG, "QR page: %s %dx%d scale=%u", title.c_str(), width, height,
+                 static_cast<unsigned>(scale));
         auto* hint = WatchLabel(watch_page_, hint_text, 11, lv_color_hex(0x7f96a3));
         lv_obj_set_width(hint, LV_HOR_RES - 40);
         lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
