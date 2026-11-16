@@ -69,6 +69,16 @@ App 只依赖系统里的 `ffmpeg`；照片/视频的转换参数与下面的 CL
 
 ## 使用
 
+### 收款码模式
+
+把收款码图片（微信/支付宝截图）拖进 App，勾选 **「收款码模式（图片输出到 Payment/）」**，转换结果会放在 `Payment/` 文件夹，直接拷到 TF 卡根目录，手表里对大肥鱼说「出示微信收款码」即可全屏展示。
+
+命令行等价：
+
+```sh
+/usr/bin/python3 convert.py --input ~/Pictures/收款码 --output ~/Desktop/watch-media --qr
+```
+
 ### 图形界面（推荐）
 
 双击 `启动压缩工具.command`：

@@ -148,6 +148,70 @@ static const sh8601_lcd_init_cmd_t vendor_specific_init[] = {
 };
 
 // 在waveshare_amoled_2_06类之前添加新的显示类
+struct PaymentCode {
+    std::string name;  // display name (file stem)
+    std::string path;
+};
+
+static std::vector<PaymentCode> ListPaymentCodes() {
+    std::vector<PaymentCode> codes;
+    for (const char* directory : {"/sdcard/Payment", "/sdcard/QRcode", "/sdcard/收款码",
+                                  "/sdcard/Pay"}) {
+        const auto files = WatchMedia::ListImagesIn(directory);
+        for (const auto& file : files) {
+            PaymentCode code;
+            code.path = file.path;
+            code.name = file.name.substr(0, file.name.find_last_of('.'));
+            codes.push_back(std::move(code));
+        }
+        if (!codes.empty())
+            break;
+    }
+    return codes;
+}
+
+static std::string LowerAscii(std::string value) {
+    for (auto& ch : value) {
+        if (ch >= 'A' && ch <= 'Z')
+            ch = static_cast<char>(ch - 'A' + 'a');
+    }
+    return value;
+}
+
+// Maps what the user says ("微信", "wechat", "支付宝"…) onto a file name.
+static bool PaymentCodeMatches(const PaymentCode& code, const std::string& query) {
+    const auto needle = LowerAscii(query);
+    if (needle.empty())
+        return true;
+    const auto haystack = LowerAscii(code.name);
+    if (haystack.find(needle) != std::string::npos)
+        return true;
+    struct Alias {
+        const char* words[5];
+    };
+    static const Alias aliases[] = {
+        {{"微信", "wechat", "weixin", "wx", nullptr}},
+        {{"支付宝", "alipay", "zhifubao", "zfb", nullptr}},
+        {{"云闪付", "unionpay", "银联", nullptr, nullptr}},
+        {{"收款", "pay", "qr", "收款码", nullptr}},
+    };
+    for (const auto& alias : aliases) {
+        bool needle_hits = false;
+        bool name_hits = false;
+        for (const char* word : alias.words) {
+            if (word == nullptr)
+                continue;
+            if (LowerAscii(word) == needle || needle.find(LowerAscii(word)) != std::string::npos)
+                needle_hits = true;
+            if (haystack.find(LowerAscii(word)) != std::string::npos)
+                name_hits = true;
+        }
+        if (needle_hits && name_hits)
+            return true;
+    }
+    return false;
+}
+
 class CustomLcdDisplay : public SpiLcdDisplay {
 private:
     // The 410x502 glass rounds all four corners; keep tappable content inside this inset.
@@ -3067,6 +3131,66 @@ private:
         }
     }
 
+    void OpenPaymentPage(const std::string& query) {
+        const auto codes = ListPaymentCodes();
+        if (codes.empty()) {
+            OpenPage("收款码", kOpenApps);
+            ShowMediaEmptyState("还没有收款码", "把收款码图片（JPG）放到 TF 卡 /Payment 文件夹");
+            return;
+        }
+        const PaymentCode* chosen = &codes.front();
+        if (!query.empty()) {
+            chosen = nullptr;
+            for (const auto& code : codes) {
+                if (PaymentCodeMatches(code, query)) {
+                    chosen = &code;
+                    break;
+                }
+            }
+            if (chosen == nullptr) {
+                OpenPage("收款码", kOpenApps);
+                std::string names;
+                for (const auto& code : codes) {
+                    names += (names.empty() ? "" : "、") + code.name;
+                }
+                ShowMediaEmptyState("没有匹配的收款码", names.c_str());
+                return;
+            }
+        }
+        const std::string path = chosen->path;
+        const std::string name = chosen->name;
+        OpenPage(name.c_str(), kOpenApps);
+        int width = 0;
+        int height = 0;
+        if (!WatchMedia::DecodeJpegFile(path, 480 * 1024, photo_bytes_, width, height)) {
+            ShowMediaEmptyState("收款码打不开", "仅支持 baseline JPEG，建议 380×380 以内");
+            return;
+        }
+        photo_dsc_ = {};
+        photo_dsc_.header.magic = LV_IMAGE_HEADER_MAGIC;
+        photo_dsc_.header.cf = LV_COLOR_FORMAT_RGB565;
+        photo_dsc_.header.w = static_cast<uint32_t>(width);
+        photo_dsc_.header.h = static_cast<uint32_t>(height);
+        photo_dsc_.header.stride = static_cast<uint32_t>(width) * 2;
+        photo_dsc_.data = photo_bytes_.data();
+        photo_dsc_.data_size = photo_bytes_.size();
+        auto* image = lv_image_create(watch_page_);
+        lv_image_set_src(image, &photo_dsc_);
+        lv_obj_clear_flag(image, LV_OBJ_FLAG_CLICKABLE);
+        // QR codes need crisp pixels: show 1:1 and only downscale when oversized.
+        if (width > 396 || height > 432) {
+            const uint32_t scale_x = static_cast<uint32_t>(396 * 256) / width;
+            const uint32_t scale_y = static_cast<uint32_t>(432 * 256) / height;
+            lv_image_set_scale(image, std::min(scale_x, scale_y));
+        }
+        lv_obj_align(image, LV_ALIGN_CENTER, 0, 6);
+        auto* hint = WatchLabel(watch_page_, "扫码付款 · 点返回关闭", 11, lv_color_hex(0x7f96a3));
+        lv_obj_set_width(hint, LV_HOR_RES - 40);
+        lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -40);
+        WatchSystemLog::Event("pay", "show", name.c_str());
+    }
+
     static std::string MemoTimeText(const VoiceMemoEntry& entry) {
         // memo_YYYYMMDD_HHMMSS.wav -> "MM-DD HH:MM"
         int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
@@ -3899,6 +4023,8 @@ public:
 
     // Used by the LAN debug endpoint to verify the media pages without touching
     // the screen. Not exposed to voice/MCP.
+    void DebugOpenPayment(const std::string& query) { OpenPaymentPage(query); }
+
     void DebugOpenMedia(bool video, int index) {
         if (video) {
             OpenVideosPage();
@@ -4038,6 +4164,8 @@ public:
             OpenVoiceMemoPage();
         else if (name == "音乐")
             OpenMusicPage();
+        else if (name == "收款码" || name == "收款" || name == "支付")
+            OpenPaymentPage("");
         else if (name == "歌曲" || name == "列表" || name == "曲库")
             OpenMusicListPage();
         else if (name == "播放音乐") {
@@ -4768,6 +4896,37 @@ private:
         music_query.SetMaxLength(64);
         Property music_track_id("track_id", kPropertyTypeString, std::string());
         music_track_id.SetMaxLength(8);
+        Property pay_code("code", kPropertyTypeString, std::string());
+        pay_code.SetMaxLength(32);
+        AddLoggedWatchTool(
+            mcp_server, "self.watch.pay.show",
+            "在手表屏幕上出示收款码，供顾客扫码付款。收款码图片由用户放在 SD 卡 Payment 文件夹"
+            "（JPG）。code 可传“微信”“支付宝”“云闪付”等，缺省出示第一个。",
+            PropertyList({pay_code}),
+            [](const PropertyList& properties) -> ReturnValue {
+                const auto code = properties["code"].value<std::string>();
+                Application::GetInstance().Schedule([code] {
+                    auto* display = Board::GetInstance().GetDisplay();
+                    if (display == nullptr)
+                        return;
+                    auto* watch = static_cast<CustomLcdDisplay*>(display);
+                    DisplayLockGuard lock(watch);
+                    if (lock)
+                        watch->DebugOpenPayment(code);
+                });
+                return std::string("已在手表上出示收款码") + (code.empty() ? "" : ("：" + code));
+            });
+        AddLoggedWatchTool(mcp_server, "self.watch.pay.list",
+                           "列出 SD 卡 Payment 文件夹里可用的收款码名称。", PropertyList(),
+                           [](const PropertyList&) -> ReturnValue {
+                               const auto codes = ListPaymentCodes();
+                               if (codes.empty())
+                                   return std::string("SD 卡 Payment 文件夹里还没有收款码图片。");
+                               std::string names;
+                               for (const auto& code : codes)
+                                   names += (names.empty() ? "" : "、") + code.name;
+                               return std::string("可用收款码：") + names;
+                           });
         AddLoggedWatchTool(mcp_server, "self.watch.music.search",
                            "在手表 SD 卡中搜索可播放的音乐。当前支持 MP3 和 WAV 文件，文件放在 SD "
                            "卡根目录或 Music 文件夹中。",

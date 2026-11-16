@@ -136,6 +136,19 @@ std::vector<MediaFile> ListPhotos() {
     return photos;
 }
 
+std::vector<MediaFile> ListImagesIn(const std::string& directory) {
+    std::vector<MediaFile> images;
+    if (directory.empty())
+        return images;
+    for (const char* extension : {".jpg", ".jpeg"}) {
+        auto batch = ListDirectory(directory, extension, 64);
+        images.insert(images.end(), batch.begin(), batch.end());
+    }
+    std::sort(images.begin(), images.end(),
+              [](const MediaFile& left, const MediaFile& right) { return left.name < right.name; });
+    return images;
+}
+
 std::vector<MediaFile> ListVideos() {
     std::vector<MediaFile> videos;
     const std::string root = VideoDirectory();

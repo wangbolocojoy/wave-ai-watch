@@ -54,6 +54,7 @@
 | **视频** | 播放 `/Video` 的 MJPEG 编码 AVI，按文件帧率逐帧软解到 PSRAM；**带 16 kHz 单声道 PCM 音轨时会同步播放声音** |
 | **活动** | QMI8658 计步，环形目标进度 |
 | **闹钟/倒计时** | 手表上设置，也能语音操作；闹钟到点唤醒 |
+| **收款码** | 把微信/支付宝收款码图片放到 TF 卡 `/Payment`，对大肥鱼说「出示微信收款码」即可全屏展示给顾客扫码；支持按名称匹配（微信/支付宝/云闪付…） |
 | **设置** | 表盘、亮度、音量、勿扰、WiFi、语音唤醒开关、关于本机 |
 | **配网** | 应用 → 设置 → WiFi，直接扫描 2.4G 网络并用手表键盘输密码；也保留 AP + 网页配网兜底 |
 | **自诊断** | 系统事件持久化到 TF 卡；开机记录复位原因、启动次数、内存水位；HTTP 接口读日志、看内存、截图、远程切页、上传/删除媒体 |
@@ -136,6 +137,7 @@ python -m esptool --chip esp32s3 -p /dev/cu.usbmodem2101 -b 921600 \
 /Photos      图片：.jpg（baseline JPEG，像素数 ≤ 240,000，如 480×500 / 640×375）
 /Video       视频：.avi（MJPEG 编码，≤ 320×240，12~15 fps，可带 16 kHz 单声道 PCM 音轨）
 /Recordings  语音备忘：.wav（16 kHz，手表自己生成）
+/Payment     收款码：.jpg（baseline，建议 ≤384×384，文件名即叫法：微信.jpg / 支付宝.jpg）
 ```
 
 固件是硬限制，格式不对会显示"无法播放"：
@@ -166,6 +168,16 @@ ffmpeg -i in.mp4 -vf "scale=320:240:force_original_aspect_ratio=decrease,fps=15"
 - 输出直接生成 `Photos/` 和 `Video/` 两个目录，拷到 TF 卡根目录即可。
 
 实测：20 张 3024×4032 照片 + 30 秒 1080p 视频 → 合计 **1.1 MB**，6 秒转完。
+
+## 收款码（AI 出示）
+
+1. 把收款码图片（微信/支付宝的收款码截图即可）放 `TF 卡/Payment/`，**文件名就是它在手表里的叫法**：
+   `微信.jpg`、`支付宝.jpg`、`云闪付.jpg`（也认 `wechat.jpg` / `alipay.jpg`）。
+2. 对大肥鱼说「把收款码给我看看」「出示微信收款码」，助手会调用手表工具 `self.watch.pay.show`，屏幕全屏显示收款码，顾客扫码即可；点返回或说「关闭」退出。
+3. 可用工具：`self.watch.pay.show`（参数 `code` 可选）、`self.watch.pay.list`（列出已有收款码）。
+4. 生成图片：用 [`tools/watch-media-converter`](tools/watch-media-converter/README.md) 勾选「收款码模式」，输出会放到 `Payment/`（384px、baseline JPEG），整个文件夹拷到卡上即可。
+
+> 建议图片 ≤384×384、白底、不要压缩太狠（App 默认质量优先）；手表按 1:1 像素显示，扫码枪和手机都能识别。
 
 ## 唤醒词
 

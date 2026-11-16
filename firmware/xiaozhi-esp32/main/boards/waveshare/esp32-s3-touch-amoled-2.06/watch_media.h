@@ -58,6 +58,9 @@ std::string VideoDirectory();
 std::vector<MediaFile> ListPhotos();
 std::vector<MediaFile> ListVideos();
 
+// Lists JPG/JPEG files inside one folder (used by the payment QR page).
+std::vector<MediaFile> ListImagesIn(const std::string& directory);
+
 // Decodes a JPEG into little-endian RGB565, downscaling until the image fits in
 // `max_bytes`. Returns false when the file is unreadable or cannot be decoded.
 bool DecodeJpegFile(const std::string& path, size_t max_bytes, PsramBytes& out, int& width,

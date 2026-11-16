@@ -141,11 +141,11 @@ final class MediaConverter {
         (try? fileManager.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
     }
 
-    func convert(inputs: [URL], output: URL, preset: Preset,
+    func convert(inputs: [URL], output: URL, preset: Preset, paymentMode: Bool = false,
                  onProgress: @escaping (Int, Int) -> Void,
                  onLog: @escaping (String) -> Void) -> Summary {
         var summary = Summary()
-        let photosDir = output.appendingPathComponent("Photos")
+        let photosDir = output.appendingPathComponent(paymentMode ? "Payment" : "Photos")
         let videosDir = output.appendingPathComponent("Video")
         try? fileManager.createDirectory(at: photosDir, withIntermediateDirectories: true)
         try? fileManager.createDirectory(at: videosDir, withIntermediateDirectories: true)
@@ -175,6 +175,10 @@ final class MediaConverter {
                     onLog("[\(index + 1)/\(sources.count)] ✓ \(source.lastPathComponent) → \(target.lastPathComponent)")
                 }
             } else if videoExtensions.contains(ext) {
+                if paymentMode {
+                    onLog("跳过视频（收款码模式）：\(source.lastPathComponent)")
+                    continue
+                }
                 let target = uniqueURL(in: videosDir, stem: stem, suffix: ".avi")
                 if let message = convertVideo(source, target: target, preset: preset) {
                     summary.failed += 1
@@ -328,6 +332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var outputDirectory = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Desktop/watch-media")
     private var busy = false
+    private var paymentModeButton: NSButton!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildWindow()
@@ -403,6 +408,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         revealButton.bezelStyle = .rounded
         revealButton.isEnabled = false
 
+        paymentModeButton = NSButton(checkboxWithTitle: "收款码模式（图片输出到 Payment/）",
+                                     target: nil, action: nil)
+        paymentModeButton.state = .off
+
         let buttonRow = NSStackView(views: [startButton, revealButton])
         buttonRow.orientation = .horizontal
         buttonRow.spacing = 12
@@ -434,7 +443,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logScroll.documentView = logView
 
         let stackedViews: [NSView] = [title, subtitle, dropView!, inputRow, outputRow, presetRow,
-                                      progressBar, statusLabel, logScroll, buttonRow]
+                                      paymentModeButton, progressBar, statusLabel, logScroll,
+                                      buttonRow]
         for view in stackedViews {
             content.addSubview(view)
         }
@@ -465,7 +475,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             presetRow.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
             presetRow.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -22),
 
-            progressBar.topAnchor.constraint(equalTo: presetRow.bottomAnchor, constant: 16),
             progressBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
             progressBar.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -22),
             progressBar.heightAnchor.constraint(equalToConstant: 6),
@@ -477,6 +486,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             statusLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
             statusLabel.bottomAnchor.constraint(equalTo: buttonRow.topAnchor, constant: -10),
+
+            paymentModeButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
+            paymentModeButton.topAnchor.constraint(equalTo: presetRow.bottomAnchor, constant: 8),
+            progressBar.topAnchor.constraint(equalTo: paymentModeButton.bottomAnchor, constant: 12),
 
             buttonRow.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
             buttonRow.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -22),
@@ -555,6 +568,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             let summary = self.converter.convert(
                 inputs: inputsCopy, output: output, preset: preset,
+                paymentMode: self.paymentModeButton.state == .on,
                 onProgress: { done, total in
                     DispatchQueue.main.async {
                         self.progressBar.maxValue = Double(max(total, 1))
