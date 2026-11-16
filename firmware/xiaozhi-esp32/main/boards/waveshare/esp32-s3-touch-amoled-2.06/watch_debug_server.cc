@@ -110,7 +110,8 @@ std::string UrlDecode(const char* input) {
 }
 
 bool TokenMatches(httpd_req_t* request) {
-    char query[96] = {};
+    // Long percent-encoded card/payment paths easily exceed 96 bytes.
+    char query[256] = {};
     char token[20] = {};
     if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK)
         return false;
@@ -159,8 +160,8 @@ esp_err_t HandleUpload(httpd_req_t* request) {
         httpd_resp_send_err(request, HTTPD_403_FORBIDDEN, "bad token");
         return ESP_OK;
     }
-    char query[160] = {};
-    char relative[96] = {};
+    char query[256] = {};
+    char relative[160] = {};
     if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK ||
         httpd_query_key_value(query, "path", relative, sizeof(relative)) != ESP_OK) {
         httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "path missing");
@@ -172,7 +173,7 @@ esp_err_t HandleUpload(httpd_req_t* request) {
         httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "only Photos/ or Video/");
         return ESP_OK;
     }
-    const std::string full = std::string("/sdcard/") + relative;
+    const std::string full = std::string("/sdcard/") + UrlDecode(relative);
     const size_t slash = full.find_last_of('/');
     if (slash != std::string::npos) {
         const std::string directory = full.substr(0, slash);
@@ -249,8 +250,8 @@ esp_err_t HandleFile(httpd_req_t* request) {
         httpd_resp_send_err(request, HTTPD_403_FORBIDDEN, "bad token");
         return ESP_OK;
     }
-    char query[160] = {};
-    char relative[96] = {};
+    char query[256] = {};
+    char relative[160] = {};
     if (httpd_req_get_url_query_str(request, query, sizeof(query)) != ESP_OK ||
         httpd_query_key_value(query, "path", relative, sizeof(relative)) != ESP_OK) {
         httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "path missing");

@@ -166,9 +166,14 @@ static std::vector<QrEntry> ListQrCodes(std::initializer_list<const char*> direc
     for (const char* directory : directories) {
         const auto files = WatchMedia::ListImagesIn(directory);
         for (const auto& file : files) {
+            const auto stem = file.name.substr(0, file.name.find_last_of('.'));
+            // Skip files whose names still contain URL escapes (left over from
+            // an old upload path) - they are not real codes.
+            if (stem.empty() || stem.front() == '.' || stem.find('%') != std::string::npos)
+                continue;
             QrEntry code;
             code.path = file.path;
-            code.name = file.name.substr(0, file.name.find_last_of('.'));
+            code.name = stem;
             codes.push_back(std::move(code));
         }
         if (!codes.empty())
@@ -3231,8 +3236,10 @@ private:
 
     // 个人名片：先列出 /Card 里所有二维码，点一个再全屏显示。
     void OpenCardPage() {
-        card_entries_ = ListCardCodes();
+        // OpenPage() -> ReleaseWatchPageHandles() clears card_entries_, so the
+        // listing has to be loaded *after* the page switch.
         OpenPage("个人名片", kOpenApps);
+        card_entries_ = ListCardCodes();
         if (card_entries_.empty()) {
             ShowMediaEmptyState("还没有名片二维码",
                                 "把微信/抖音/Instagram 等二维码图片（JPG）放到 TF 卡 /Card 文件夹");
