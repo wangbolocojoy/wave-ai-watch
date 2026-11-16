@@ -165,7 +165,9 @@ final class MediaConverter {
 
             if photoExtensions.contains(ext) {
                 let target = uniqueURL(in: photosDir, stem: stem, suffix: ".jpg")
-                if let message = convertPhoto(source, target: target, preset: preset) {
+                let failure = paymentMode ? convertPaymentImage(source, target: target)
+                                          : convertPhoto(source, target: target, preset: preset)
+                if let message = failure {
                     summary.failed += 1
                     onLog("[\(index + 1)/\(sources.count)] ✗ \(source.lastPathComponent)：\(message)")
                 } else {
@@ -195,6 +197,109 @@ final class MediaConverter {
         }
         onProgress(sources.count, sources.count)
         return summary
+    }
+
+    /// 收款码模式：识别二维码位置并裁到它（CIQRCodeDetector），失败时退化为“深色内容包围盒”。
+    private func qrCroppedImage(_ source: URL) -> CGImage? {
+        guard let image = NSImage(contentsOf: source) else { return nil }
+        var rect = CGRect(origin: .zero, size: image.size)
+        guard let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { return nil }
+        if let detector = CIDetector(ofType: CIDetectorTypeQRCode, context: nil,
+                                     options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]),
+           let features = detector.features(in: CIImage(cgImage: cg)) as? [CIQRCodeFeature],
+           let best = features.first {
+            let bounds = best.bounds  // CoreImage 坐标：左下原点
+            let top = CGFloat(cg.height) - (bounds.origin.y + bounds.height)
+            var box = CGRect(x: bounds.origin.x, y: top, width: bounds.width, height: bounds.height)
+            let pad = max(box.width, box.height) * 0.08
+            box = box.insetBy(dx: -pad, dy: -pad)
+            let canvas = CGRect(x: 0, y: 0, width: cg.width, height: cg.height)
+            if let cropped = cg.cropping(to: box.intersection(canvas)) { return cropped }
+        }
+        return darkContentCrop(cg)
+    }
+
+    private func darkContentCrop(_ cg: CGImage) -> CGImage? {
+        let probeWidth = 240
+        let probeHeight = max(1, Int(Double(cg.height) * Double(probeWidth) / Double(max(1, cg.width))))
+        guard let context = CGContext(data: nil, width: probeWidth, height: probeHeight,
+                                      bitsPerComponent: 8, bytesPerRow: probeWidth * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let data = context.data else { return nil }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: probeWidth, height: probeHeight))
+        let pixels = data.bindMemory(to: UInt8.self, capacity: probeWidth * probeHeight * 4)
+        var minX = probeWidth, maxX = 0, minY = probeHeight, maxY = 0
+        var found = false
+        for y in 0..<probeHeight {
+            for x in 0..<probeWidth {
+                let offset = (y * probeWidth + x) * 4
+                let luminance = (Int(pixels[offset]) + Int(pixels[offset + 1]) + Int(pixels[offset + 2])) / 3
+                if luminance < 120 {
+                    found = true
+                    minX = min(minX, x); maxX = max(maxX, x)
+                    minY = min(minY, y); maxY = max(maxY, y)
+                }
+            }
+        }
+        guard found else { return nil }
+        let scaleX = CGFloat(cg.width) / CGFloat(probeWidth)
+        let scaleY = CGFloat(cg.height) / CGFloat(probeHeight)
+        var box = CGRect(x: CGFloat(minX) * scaleX, y: CGFloat(minY) * scaleY,
+                         width: CGFloat(maxX - minX + 1) * scaleX,
+                         height: CGFloat(maxY - minY + 1) * scaleY)
+        let side = max(box.width, box.height)
+        let pad = side * 0.08
+        box = CGRect(x: box.midX - side / 2 - pad, y: box.midY - side / 2 - pad,
+                     width: side + pad * 2, height: side + pad * 2)
+        let canvas = CGRect(x: 0, y: 0, width: cg.width, height: cg.height)
+        return cg.cropping(to: box.intersection(canvas))
+    }
+
+    /// 收款码输出：裁切 + 居中到 384×384 白底 canvas，JPEG 质量 0.92。
+    private func convertPaymentImage(_ source: URL, target: URL) -> String? {
+        guard var cg = qrCroppedImage(source) else { return "无法读取图片" }
+        if cg.width > 384 || cg.height > 384 {
+            let scale = 384.0 / Double(max(cg.width, cg.height))
+            let width = max(1, Int(Double(cg.width) * scale))
+            let height = max(1, Int(Double(cg.height) * scale))
+            guard let context = CGContext(data: nil, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+                  let scaled = { () -> CGImage? in
+                      context.interpolationQuality = .high
+                      context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+                      return context.makeImage()
+                  }() else { return "缩放失败" }
+            cg = scaled
+        }
+        let side = 384
+        guard let canvas = CGContext(data: nil, width: side, height: side,
+                                     bitsPerComponent: 8, bytesPerRow: 0,
+                                     space: CGColorSpaceCreateDeviceRGB(),
+                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return "创建画布失败"
+        }
+        canvas.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        canvas.fill(CGRect(x: 0, y: 0, width: side, height: side))
+        let scale = min(Double(side) / Double(cg.width), Double(side) / Double(cg.height))
+        let width = Double(cg.width) * scale
+        let height = Double(cg.height) * scale
+        canvas.interpolationQuality = .high
+        canvas.draw(cg, in: CGRect(x: (Double(side) - width) / 2, y: (Double(side) - height) / 2,
+                                   width: width, height: height))
+        guard let final = canvas.makeImage() else { return "渲染失败" }
+        let rep = NSBitmapImageRep(cgImage: final)
+        guard let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.92]) else {
+            return "编码失败"
+        }
+        do {
+            try data.write(to: target)
+        } catch {
+            return error.localizedDescription
+        }
+        return nil
     }
 
     private func convertPhoto(_ source: URL, target: URL, preset: Preset) -> String? {
@@ -624,6 +729,7 @@ if let cliIndex = rawArguments.firstIndex(of: "--cli") {
     var cliOutput = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Desktop/watch-media")
     var cliPreset = Preset.all[1]
+    var cliPaymentMode = false
     var index = cliIndex + 1
     while index < rawArguments.count {
         switch rawArguments[index] {
@@ -643,6 +749,8 @@ if let cliIndex = rawArguments.firstIndex(of: "--cli") {
         case "--preset":
             index += 1
             if index < rawArguments.count { cliPreset = Preset.named(rawArguments[index]) }
+        case "--qr":
+            cliPaymentMode = true
         default:
             break
         }
@@ -651,6 +759,7 @@ if let cliIndex = rawArguments.firstIndex(of: "--cli") {
     let cliConverter = MediaConverter()
     let cliSummary = cliConverter.convert(
         inputs: cliInputs, output: cliOutput, preset: cliPreset,
+        paymentMode: cliPaymentMode,
         onProgress: { _, _ in },
         onLog: { echo($0) })
     echo("完成：照片 \(cliSummary.photos)，视频 \(cliSummary.videos)，失败 \(cliSummary.failed)")

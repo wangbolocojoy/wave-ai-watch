@@ -3177,12 +3177,13 @@ private:
         auto* image = lv_image_create(watch_page_);
         lv_image_set_src(image, &photo_dsc_);
         lv_obj_clear_flag(image, LV_OBJ_FLAG_CLICKABLE);
-        // QR codes need crisp pixels: show 1:1 and only downscale when oversized.
-        if (width > 396 || height > 432) {
-            const uint32_t scale_x = static_cast<uint32_t>(396 * 256) / width;
-            const uint32_t scale_y = static_cast<uint32_t>(432 * 256) / height;
-            lv_image_set_scale(image, std::min(scale_x, scale_y));
-        }
+        // Fill the viewport: small crops are upscaled so they stay scannable,
+        // oversized screenshots are downscaled to fit. Cap at 2x to avoid blur.
+        const uint32_t scale_x = static_cast<uint32_t>(396 * 256) / static_cast<uint32_t>(width);
+        const uint32_t scale_y = static_cast<uint32_t>(432 * 256) / static_cast<uint32_t>(height);
+        const uint32_t scale = std::min<uint32_t>(512u, std::max<uint32_t>(256u, std::min(scale_x, scale_y)));
+        if (scale != 256)
+            lv_image_set_scale(image, scale);
         lv_obj_align(image, LV_ALIGN_CENTER, 0, 6);
         auto* hint = WatchLabel(watch_page_, "扫码付款 · 点返回关闭", 11, lv_color_hex(0x7f96a3));
         lv_obj_set_width(hint, LV_HOR_RES - 40);
@@ -4905,6 +4906,10 @@ private:
             PropertyList({pay_code}),
             [](const PropertyList& properties) -> ReturnValue {
                 const auto code = properties["code"].value<std::string>();
+                if (ListPaymentCodes().empty()) {
+                    return std::string(
+                        "TF 卡 Payment 文件夹里还没有收款码图片，请让用户先放一张 JPG 收款码。");
+                }
                 Application::GetInstance().Schedule([code] {
                     auto* display = Board::GetInstance().GetDisplay();
                     if (display == nullptr)
@@ -5289,6 +5294,10 @@ public:
                     power_save_timer_->WakeUp();
                 SetWatchAod(false);
                 // Debug-only deep links used to verify the media pages.
+                if (page.rfind("pay:", 0) == 0) {
+                    watch->DebugOpenPayment(page.substr(4));
+                    return;
+                }
                 if (page.rfind("photo:", 0) == 0) {
                     watch->DebugOpenMedia(false, std::atoi(page.c_str() + 6));
                     return;

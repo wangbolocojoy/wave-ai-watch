@@ -73,6 +73,45 @@ def photo_box(preset: Preset) -> int:
     return min(preset.photo_side, int(MAX_PHOTO_PIXELS ** 0.5))
 
 
+def crop_to_qr(source: Path) -> Path:
+    """收款码模式：把截图裁到二维码/深色内容区域（需要 Pillow）。"""
+    try:
+        from PIL import Image
+    except ImportError:
+        return source
+    try:
+        image = Image.open(source).convert("RGB")
+        gray = image.convert("L")
+        width, height = gray.size
+        # 缩小后再找深色区域，速度快且不受噪点影响
+        small = gray.resize((max(1, width // 8), max(1, height // 8)))
+        pixels = small.load()
+        xs, ys = [], []
+        for y in range(small.height):
+            for x in range(small.width):
+                if pixels[x, y] < 110:
+                    xs.append(x)
+                    ys.append(y)
+        if not xs:
+            return source
+        left, right = min(xs) * 8, (max(xs) + 1) * 8
+        top, bottom = min(ys) * 8, (max(ys) + 1) * 8
+        span = max(right - left, bottom - top)
+        pad = int(span * 0.08)
+        side = span + pad * 2
+        cx = (left + right) // 2
+        cy = (top + bottom) // 2
+        box = (max(0, cx - side // 2), max(0, cy - side // 2),
+               min(width, cx + side // 2), min(height, cy + side // 2))
+        cropped = image.crop(box)
+        out = Path(tempfile.mkstemp(suffix=".png")[1])
+        cropped.save(out)
+        print(f"  收款码裁切：{width}×{height} → {cropped.size[0]}×{cropped.size[1]}")
+        return out
+    except Exception:
+        return source
+
+
 def convert_photo(source: Path, destination: Path, preset: Preset, log) -> tuple[bool, str]:
     """转成 baseline JPEG（4:2:0），自动摆正方向。"""
     work = source
@@ -196,8 +235,16 @@ def convert_all(inputs: list[Path], output: Path, preset: Preset, log, progress=
         detail = ""
         ok = False
         if suffix in PHOTO_EXTS:
+            if payment_mode:
+                cropped = crop_to_qr(source)
+                if cropped != source:
+                    source_to_use = cropped
+                else:
+                    source_to_use = source
+            else:
+                source_to_use = source
             target = unique_path(photos_dir, source.stem, ".jpg")
-            ok, detail = convert_photo(source, target, preset, log)
+            ok, detail = convert_photo(source_to_use, target, preset, log)
             kind = "photo"
         elif suffix in VIDEO_EXTS:
             target = unique_path(videos_dir, source.stem, ".avi")
