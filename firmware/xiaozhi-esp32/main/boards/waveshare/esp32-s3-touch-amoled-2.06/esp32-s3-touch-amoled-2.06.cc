@@ -147,19 +147,26 @@ static const sh8601_lcd_init_cmd_t vendor_specific_init[] = {
     {0x51, (uint8_t[]){0xFF}, 1, 0},
 };
 
-// 在waveshare_amoled_2_06类之前添加新的显示类
-struct PaymentCode {
+// ---- 收款码 / 个人名片二维码 ----
+struct QrEntry {
     std::string name;  // display name (file stem)
     std::string path;
 };
 
-static std::vector<PaymentCode> ListPaymentCodes() {
-    std::vector<PaymentCode> codes;
-    for (const char* directory : {"/sdcard/Payment", "/sdcard/QRcode", "/sdcard/收款码",
-                                  "/sdcard/Pay"}) {
+static std::string LowerAscii(std::string value) {
+    for (auto& ch : value) {
+        if (ch >= 'A' && ch <= 'Z')
+            ch = static_cast<char>(ch - 'A' + 'a');
+    }
+    return value;
+}
+
+static std::vector<QrEntry> ListQrCodes(std::initializer_list<const char*> directories) {
+    std::vector<QrEntry> codes;
+    for (const char* directory : directories) {
         const auto files = WatchMedia::ListImagesIn(directory);
         for (const auto& file : files) {
-            PaymentCode code;
+            QrEntry code;
             code.path = file.path;
             code.name = file.name.substr(0, file.name.find_last_of('.'));
             codes.push_back(std::move(code));
@@ -170,16 +177,24 @@ static std::vector<PaymentCode> ListPaymentCodes() {
     return codes;
 }
 
-static std::string LowerAscii(std::string value) {
-    for (auto& ch : value) {
-        if (ch >= 'A' && ch <= 'Z')
-            ch = static_cast<char>(ch - 'A' + 'a');
-    }
-    return value;
+static std::vector<QrEntry> ListPaymentCodes() {
+    return ListQrCodes({"/sdcard/Payment", "/sdcard/QRcode", "/sdcard/收款码", "/sdcard/Pay"});
 }
 
-// Maps what the user says ("微信", "wechat", "支付宝"…) onto a file name.
-static bool PaymentCodeMatches(const PaymentCode& code, const std::string& query) {
+static std::string JoinQrNames(const std::vector<QrEntry>& codes) {
+    std::string names;
+    for (const auto& code : codes) {
+        names += (names.empty() ? "" : "、") + code.name;
+    }
+    return names;
+}
+
+static std::vector<QrEntry> ListCardCodes() {
+    return ListQrCodes({"/sdcard/Card", "/sdcard/名片", "/sdcard/QRcard"});
+}
+
+// Maps what the user says ("微信", "抖音", "instagram"…) onto a file name.
+static bool QrNameMatches(const QrEntry& code, const std::string& query) {
     const auto needle = LowerAscii(query);
     if (needle.empty())
         return true;
@@ -187,12 +202,20 @@ static bool PaymentCodeMatches(const PaymentCode& code, const std::string& query
     if (haystack.find(needle) != std::string::npos)
         return true;
     struct Alias {
-        const char* words[5];
+        const char* words[6];
     };
     static const Alias aliases[] = {
         {{"微信", "wechat", "weixin", "wx", nullptr}},
         {{"支付宝", "alipay", "zhifubao", "zfb", nullptr}},
-        {{"云闪付", "unionpay", "银联", nullptr, nullptr}},
+        {{"云闪付", "unionpay", "银联", nullptr}},
+        {{"抖音", "douyin", "tiktok", "dy", nullptr}},
+        {{"instagram", "ins", "ig", nullptr}},
+        {{"小红书", "xiaohongshu", "xhs", "redbook", nullptr}},
+        {{"微博", "weibo", nullptr}},
+        {{"b站", "bilibili", "bibi", nullptr}},
+        {{"qq", "扣扣", nullptr}},
+        {{"whatsapp", "wa", nullptr}},
+        {{"名片", "card", "contact", nullptr}},
         {{"收款", "pay", "qr", "收款码", nullptr}},
     };
     for (const auto& alias : aliases) {
@@ -342,6 +365,7 @@ private:
     int wifi_connect_ticks_ = 0;
     std::string wifi_connect_ssid_;
     std::vector<MediaFile> media_entries_;
+    std::vector<QrEntry> card_entries_;
     PsramBytes photo_bytes_;
     size_t photo_index_ = 0;
     bool media_video_mode_ = false;
@@ -1739,6 +1763,7 @@ private:
         // clear()+shrink_to_fit() is not guaranteed to hand the PSRAM block back;
         // swapping in an empty vector releases it deterministically.
         PsramBytes().swap(photo_bytes_);
+        card_entries_.clear();
         if (wifi_connect_timer_ != nullptr) {
             lv_timer_delete(wifi_connect_timer_);
             wifi_connect_timer_ = nullptr;
@@ -3131,39 +3156,14 @@ private:
         }
     }
 
-    void OpenPaymentPage(const std::string& query) {
-        const auto codes = ListPaymentCodes();
-        if (codes.empty()) {
-            OpenPage("收款码", kOpenApps);
-            ShowMediaEmptyState("还没有收款码", "把收款码图片（JPG）放到 TF 卡 /Payment 文件夹");
-            return;
-        }
-        const PaymentCode* chosen = &codes.front();
-        if (!query.empty()) {
-            chosen = nullptr;
-            for (const auto& code : codes) {
-                if (PaymentCodeMatches(code, query)) {
-                    chosen = &code;
-                    break;
-                }
-            }
-            if (chosen == nullptr) {
-                OpenPage("收款码", kOpenApps);
-                std::string names;
-                for (const auto& code : codes) {
-                    names += (names.empty() ? "" : "、") + code.name;
-                }
-                ShowMediaEmptyState("没有匹配的收款码", names.c_str());
-                return;
-            }
-        }
-        const std::string path = chosen->path;
-        const std::string name = chosen->name;
-        OpenPage(name.c_str(), kOpenApps);
+    // 显示一张二维码图片（收款码 / 名片通用）：铺满视口、点返回关闭。
+    void OpenQrImagePage(const std::string& title, const std::string& path, const char* hint_text,
+                         const char* log_category) {
+        OpenPage(title.c_str(), kOpenApps);
         int width = 0;
         int height = 0;
         if (!WatchMedia::DecodeJpegFile(path, 480 * 1024, photo_bytes_, width, height)) {
-            ShowMediaEmptyState("收款码打不开", "仅支持 baseline JPEG，建议 380×380 以内");
+            ShowMediaEmptyState("图片打不开", "仅支持 baseline JPEG，建议 384×384 以内");
             return;
         }
         photo_dsc_ = {};
@@ -3181,15 +3181,107 @@ private:
         // oversized screenshots are downscaled to fit. Cap at 2x to avoid blur.
         const uint32_t scale_x = static_cast<uint32_t>(396 * 256) / static_cast<uint32_t>(width);
         const uint32_t scale_y = static_cast<uint32_t>(432 * 256) / static_cast<uint32_t>(height);
-        const uint32_t scale = std::min<uint32_t>(512u, std::max<uint32_t>(256u, std::min(scale_x, scale_y)));
+        const uint32_t scale =
+            std::min<uint32_t>(512u, std::max<uint32_t>(256u, std::min(scale_x, scale_y)));
         if (scale != 256)
             lv_image_set_scale(image, scale);
         lv_obj_align(image, LV_ALIGN_CENTER, 0, 6);
-        auto* hint = WatchLabel(watch_page_, "扫码付款 · 点返回关闭", 11, lv_color_hex(0x7f96a3));
+        auto* hint = WatchLabel(watch_page_, hint_text, 11, lv_color_hex(0x7f96a3));
         lv_obj_set_width(hint, LV_HOR_RES - 40);
         lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -40);
-        WatchSystemLog::Event("pay", "show", name.c_str());
+        WatchSystemLog::Event(log_category, "show", title.c_str());
+    }
+
+    void OpenPaymentPage(const std::string& query) {
+        const auto codes = ListPaymentCodes();
+        if (codes.empty()) {
+            OpenPage("收款码", kOpenApps);
+            ShowMediaEmptyState("还没有收款码", "把收款码图片（JPG）放到 TF 卡 /Payment 文件夹");
+            return;
+        }
+        const QrEntry* chosen = &codes.front();
+        if (!query.empty()) {
+            chosen = nullptr;
+            for (const auto& code : codes) {
+                if (QrNameMatches(code, query)) {
+                    chosen = &code;
+                    break;
+                }
+            }
+            if (chosen == nullptr) {
+                OpenPage("收款码", kOpenApps);
+                ShowMediaEmptyState("没有匹配的收款码", JoinQrNames(codes).c_str());
+                return;
+            }
+        }
+        OpenQrImagePage(chosen->name, chosen->path, "扫码付款 · 点返回关闭", "pay");
+    }
+
+    // 个人名片：先列出 /Card 里所有二维码，点一个再全屏显示。
+    void OpenCardPage() {
+        card_entries_ = ListCardCodes();
+        OpenPage("个人名片", kOpenApps);
+        if (card_entries_.empty()) {
+            ShowMediaEmptyState("还没有名片二维码",
+                                "把微信/抖音/Instagram 等二维码图片（JPG）放到 TF 卡 /Card 文件夹");
+            return;
+        }
+        if (card_entries_.size() == 1) {
+            OpenQrImagePage(card_entries_[0].name, card_entries_[0].path, "扫码加我 · 点返回关闭",
+                            "card");
+            return;
+        }
+        auto* list = lv_obj_create(watch_page_);
+        lv_obj_remove_style_all(list);
+        lv_obj_set_pos(list, kScreenSafeInsetX, 72);
+        lv_obj_set_size(list, LV_HOR_RES - 2 * kScreenSafeInsetX, 384);
+        lv_obj_set_layout(list, LV_LAYOUT_FLEX);
+        lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_row(list, 5, 0);
+        lv_obj_set_style_pad_all(list, 0, 0);
+        lv_obj_set_scroll_dir(list, LV_DIR_VER);
+        lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+        for (size_t index = 0; index < card_entries_.size(); ++index) {
+            auto* row = lv_button_create(list);
+            lv_obj_set_width(row, LV_HOR_RES - 2 * kScreenSafeInsetX);
+            lv_obj_set_height(row, 52);
+            lv_obj_set_style_bg_color(row, lv_color_hex(0x0d1a24), 0);
+            lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+            lv_obj_set_style_border_width(row, 0, 0);
+            lv_obj_set_style_radius(row, 12, 0);
+            lv_obj_set_style_shadow_width(row, 0, 0);
+            lv_obj_add_event_cb(row, HandleCardRowEvent, LV_EVENT_CLICKED,
+                                reinterpret_cast<void*>(static_cast<std::intptr_t>(index)));
+            auto* name = WatchLabel(row, card_entries_[index].name.c_str(), 15,
+                                    lv_color_hex(0xeaf5f7));
+            lv_obj_align(name, LV_ALIGN_LEFT_MID, 14, 0);
+            auto* glyph = WatchIcon(row, MATERIAL_SYMBOLS_LINK, 14, lv_color_hex(0x65e6d6));
+            lv_obj_align(glyph, LV_ALIGN_RIGHT_MID, -14, 0);
+        }
+        WatchSystemLog::Event("card", "list", std::to_string(card_entries_.size()).c_str());
+    }
+
+    void OpenCardQr(size_t index) {
+        if (index >= card_entries_.size())
+            return;
+        OpenQrImagePage(card_entries_[index].name, card_entries_[index].path,
+                        "扫码加我 · 点返回关闭", "card");
+    }
+
+    static void HandleCardRowEvent(lv_event_t* event) {
+        auto* self = static_cast<CustomLcdDisplay*>(Board::GetInstance().GetDisplay());
+        if (self == nullptr)
+            return;
+        const auto index = reinterpret_cast<std::intptr_t>(lv_event_get_user_data(event));
+        if (index < 0)
+            return;
+        const auto target = static_cast<size_t>(index);
+        Application::GetInstance().Schedule([self, target] {
+            DisplayLockGuard lock(self);
+            if (lock)
+                self->OpenCardQr(target);
+        });
     }
 
     static std::string MemoTimeText(const VoiceMemoEntry& entry) {
@@ -4026,6 +4118,21 @@ public:
     // the screen. Not exposed to voice/MCP.
     void DebugOpenPayment(const std::string& query) { OpenPaymentPage(query); }
 
+    void DebugOpenCard(const std::string& query) {
+        if (query.empty()) {
+            OpenCardPage();
+            return;
+        }
+        const auto codes = ListCardCodes();
+        for (const auto& code : codes) {
+            if (QrNameMatches(code, query)) {
+                OpenQrImagePage(code.name, code.path, "扫码加我 · 点返回关闭", "card");
+                return;
+            }
+        }
+        OpenCardPage();
+    }
+
     void DebugOpenMedia(bool video, int index) {
         if (video) {
             OpenVideosPage();
@@ -4165,6 +4272,8 @@ public:
             OpenVoiceMemoPage();
         else if (name == "音乐")
             OpenMusicPage();
+        else if (name == "名片" || name == "个人名片" || name == "二维码")
+            OpenCardPage();
         else if (name == "收款码" || name == "收款" || name == "支付")
             OpenPaymentPage("");
         else if (name == "歌曲" || name == "列表" || name == "曲库")
@@ -4932,6 +5041,39 @@ private:
                                    names += (names.empty() ? "" : "、") + code.name;
                                return std::string("可用收款码：") + names;
                            });
+        Property card_code("code", kPropertyTypeString, std::string());
+        card_code.SetMaxLength(32);
+        AddLoggedWatchTool(
+            mcp_server, "self.watch.card.show",
+            "在手表屏幕上出示个人名片二维码（微信、抖音、Instagram、小红书等）。二维码图片由用户放在"
+            " SD 卡 Card 文件夹（JPG），文件名即平台名。code 可传“微信”“抖音”“instagram”等，"
+            "缺省打开名片列表。",
+            PropertyList({card_code}),
+            [](const PropertyList& properties) -> ReturnValue {
+                const auto code = properties["code"].value<std::string>();
+                if (ListCardCodes().empty()) {
+                    return std::string(
+                        "TF 卡 Card 文件夹里还没有名片二维码，请让用户先放几张 JPG 二维码。");
+                }
+                Application::GetInstance().Schedule([code] {
+                    auto* display = Board::GetInstance().GetDisplay();
+                    if (display == nullptr)
+                        return;
+                    auto* watch = static_cast<CustomLcdDisplay*>(display);
+                    DisplayLockGuard lock(watch);
+                    if (lock)
+                        watch->DebugOpenCard(code);
+                });
+                return std::string("已在手表上打开个人名片") + (code.empty() ? "" : ("：" + code));
+            });
+        AddLoggedWatchTool(mcp_server, "self.watch.card.list",
+                           "列出 SD 卡 Card 文件夹里可用的名片二维码名称。", PropertyList(),
+                           [](const PropertyList&) -> ReturnValue {
+                               const auto codes = ListCardCodes();
+                               if (codes.empty())
+                                   return std::string("SD 卡 Card 文件夹里还没有名片二维码。");
+                               return std::string("可用名片二维码：") + JoinQrNames(codes);
+                           });
         AddLoggedWatchTool(mcp_server, "self.watch.music.search",
                            "在手表 SD 卡中搜索可播放的音乐。当前支持 MP3 和 WAV 文件，文件放在 SD "
                            "卡根目录或 Music 文件夹中。",
@@ -5296,6 +5438,10 @@ public:
                 // Debug-only deep links used to verify the media pages.
                 if (page.rfind("pay:", 0) == 0) {
                     watch->DebugOpenPayment(page.substr(4));
+                    return;
+                }
+                if (page.rfind("card:", 0) == 0) {
+                    watch->DebugOpenCard(page.substr(5));
                     return;
                 }
                 if (page.rfind("photo:", 0) == 0) {

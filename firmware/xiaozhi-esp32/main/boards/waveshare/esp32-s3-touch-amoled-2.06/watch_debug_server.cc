@@ -168,7 +168,7 @@ esp_err_t HandleUpload(httpd_req_t* request) {
     }
     if (std::strstr(relative, "..") != nullptr ||
         (std::strncmp(relative, "Photos/", 7) != 0 && std::strncmp(relative, "Video/", 6) != 0 &&
-         std::strncmp(relative, "Payment/", 8) != 0)) {
+         std::strncmp(relative, "Payment/", 8) != 0 && std::strncmp(relative, "Card/", 5) != 0)) {
         httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "only Photos/ or Video/");
         return ESP_OK;
     }
@@ -279,7 +279,7 @@ esp_err_t HandleDelete(httpd_req_t* request) {
     const std::string decoded = UrlDecode(relative);
     if (decoded.find("..") != std::string::npos ||
         (decoded.rfind("Photos/", 0) != 0 && decoded.rfind("Video/", 0) != 0 &&
-         decoded.rfind("Payment/", 0) != 0)) {
+         decoded.rfind("Payment/", 0) != 0 && decoded.rfind("Card/", 0) != 0)) {
         httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "only Photos/ or Video/");
         return ESP_OK;
     }

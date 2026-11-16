@@ -55,6 +55,7 @@
 | **活动** | QMI8658 计步，环形目标进度 |
 | **闹钟/倒计时** | 手表上设置，也能语音操作；闹钟到点唤醒 |
 | **收款码** | 把微信/支付宝收款码图片放到 TF 卡 `/Payment`，对大肥鱼说「出示微信收款码」即可全屏展示给顾客扫码；支持按名称匹配（微信/支付宝/云闪付…） |
+| **个人名片** | 把微信/抖音/Instagram/小红书等二维码放到 `/Card`，说「打开我的名片」会先列出全部二维码，点一个全屏展示；也能直接说「出示抖音二维码」 |
 | **设置** | 表盘、亮度、音量、勿扰、WiFi、语音唤醒开关、关于本机 |
 | **配网** | 应用 → 设置 → WiFi，直接扫描 2.4G 网络并用手表键盘输密码；也保留 AP + 网页配网兜底 |
 | **自诊断** | 系统事件持久化到 TF 卡；开机记录复位原因、启动次数、内存水位；HTTP 接口读日志、看内存、截图、远程切页、上传/删除媒体 |
@@ -138,6 +139,7 @@ python -m esptool --chip esp32s3 -p /dev/cu.usbmodem2101 -b 921600 \
 /Video       视频：.avi（MJPEG 编码，≤ 320×240，12~15 fps，可带 16 kHz 单声道 PCM 音轨）
 /Recordings  语音备忘：.wav（16 kHz，手表自己生成）
 /Payment     收款码：.jpg（baseline，建议 ≤384×384，文件名即叫法：微信.jpg / 支付宝.jpg）
+/Card        个人名片：微信.jpg / 抖音.jpg / Instagram.jpg / 小红书.jpg（同样 384×384 JPG）
 ```
 
 固件是硬限制，格式不对会显示"无法播放"：
@@ -178,6 +180,15 @@ ffmpeg -i in.mp4 -vf "scale=320:240:force_original_aspect_ratio=decrease,fps=15"
 4. 生成图片：用 [`tools/watch-media-converter`](tools/watch-media-converter/README.md) 勾选「收款码模式」，输出会放到 `Payment/`（384px、baseline JPEG），整个文件夹拷到卡上即可。
 
 > 建议图片 ≤384×384、白底、不要压缩太狠（App 默认质量优先）；手表按 1:1 像素显示，扫码枪和手机都能识别。
+
+## 个人名片（二维码合集）
+
+1. 把各平台二维码图片（手机截图也行）放 `TF 卡/Card/`，文件名 = 平台名：
+   `微信.jpg`、`抖音.jpg`、`Instagram.jpg`、`小红书.jpg`…
+2. 对大肥鱼说「打开我的名片」→ 屏幕列出所有二维码，点一个看大图；
+   也可以直接说「出示抖音二维码」「打开 Instagram 二维码」。
+3. AI 工具：`self.watch.card.show`（`code` 可选）、`self.watch.card.list`。
+4. 用媒体压缩 App 的「名片（Card/）」输出模式生成：自动识别并裁切二维码，384×384 白底 JPEG。
 
 ## 唤醒词
 

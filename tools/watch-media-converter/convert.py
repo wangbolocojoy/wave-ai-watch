@@ -217,8 +217,10 @@ def collect_sources(inputs: list[Path]) -> list[Path]:
 
 
 def convert_all(inputs: list[Path], output: Path, preset: Preset, log, progress=None,
-                payment_mode: bool = False) -> dict:
-    photos_dir = output / ("Payment" if payment_mode else "Photos")
+                payment_mode: bool = False, card_mode: bool = False) -> dict:
+    qr_mode = payment_mode or card_mode
+    folder = "Payment" if payment_mode else ("Card" if card_mode else "Photos")
+    photos_dir = output / folder
     videos_dir = output / "Video"
     photos_dir.mkdir(parents=True, exist_ok=True)
     videos_dir.mkdir(parents=True, exist_ok=True)
@@ -235,7 +237,7 @@ def convert_all(inputs: list[Path], output: Path, preset: Preset, log, progress=
         detail = ""
         ok = False
         if suffix in PHOTO_EXTS:
-            if payment_mode:
+            if qr_mode:
                 cropped = crop_to_qr(source)
                 if cropped != source:
                     source_to_use = cropped
@@ -406,6 +408,8 @@ def main() -> None:
     parser.add_argument("--preset", choices=sorted(PRESETS), default="standard")
     parser.add_argument("--qr", action="store_true",
                         help="收款码模式：图片输出到 Payment/（384px，质量优先），跳过视频")
+    parser.add_argument("--card", action="store_true",
+                        help="名片模式：图片输出到 Card/（微信/抖音/Instagram 等二维码）")
     parser.add_argument("--gui", action="store_true", help="打开图形界面")
     args = parser.parse_args()
 
@@ -415,12 +419,13 @@ def main() -> None:
 
     if not check_tools():
         sys.exit(1)
-    preset = PRESETS["sharp"] if args.qr else PRESETS[args.preset]
+    preset = PRESETS["sharp"] if (args.qr or args.card) else PRESETS[args.preset]
     if args.qr:
-        log = print
-        log("收款码模式：图片输出到 Payment/（384px）")
-    summary = convert_all(
-        args.input, args.output, preset, print, None, payment_mode=args.qr)
+        print("收款码模式：图片输出到 Payment/（384px）")
+    elif args.card:
+        print("名片模式：图片输出到 Card/（384px）")
+    summary = convert_all(args.input, args.output, preset, print, None,
+                          payment_mode=args.qr, card_mode=args.card)
     print()
     print(f"完成：照片 {summary['photos']} 张，视频 {summary['videos']} 个，失败 {summary['failed']} 个")
     print(f"输出：{args.output}")

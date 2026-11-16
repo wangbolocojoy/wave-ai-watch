@@ -141,11 +141,17 @@ final class MediaConverter {
         (try? fileManager.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
     }
 
-    func convert(inputs: [URL], output: URL, preset: Preset, paymentMode: Bool = false,
+    enum OutputMode {
+        case normal, payment, card
+    }
+
+    func convert(inputs: [URL], output: URL, preset: Preset, mode: OutputMode = .normal,
                  onProgress: @escaping (Int, Int) -> Void,
                  onLog: @escaping (String) -> Void) -> Summary {
         var summary = Summary()
-        let photosDir = output.appendingPathComponent(paymentMode ? "Payment" : "Photos")
+        let paymentMode = mode != .normal
+        let folder = mode == .payment ? "Payment" : (mode == .card ? "Card" : "Photos")
+        let photosDir = output.appendingPathComponent(folder)
         let videosDir = output.appendingPathComponent("Video")
         try? fileManager.createDirectory(at: photosDir, withIntermediateDirectories: true)
         try? fileManager.createDirectory(at: videosDir, withIntermediateDirectories: true)
@@ -437,7 +443,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var outputDirectory = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Desktop/watch-media")
     private var busy = false
-    private var paymentModeButton: NSButton!
+    private var outputModePopup: NSPopUpButton!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildWindow()
@@ -513,9 +519,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         revealButton.bezelStyle = .rounded
         revealButton.isEnabled = false
 
-        paymentModeButton = NSButton(checkboxWithTitle: "收款码模式（图片输出到 Payment/）",
-                                     target: nil, action: nil)
-        paymentModeButton.state = .off
+        outputModePopup = NSPopUpButton()
+        outputModePopup.addItems(withTitles: ["普通输出（Photos/）", "收款码（Payment/）", "名片（Card/）"])
+        let modeCaption = NSTextField(labelWithString: "输出")
+        modeCaption.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        let modeRow = NSStackView(views: [modeCaption, outputModePopup])
+        modeRow.orientation = .horizontal
+        modeRow.spacing = 8
+        modeRow.translatesAutoresizingMaskIntoConstraints = false
 
         let buttonRow = NSStackView(views: [startButton, revealButton])
         buttonRow.orientation = .horizontal
@@ -548,7 +559,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logScroll.documentView = logView
 
         let stackedViews: [NSView] = [title, subtitle, dropView!, inputRow, outputRow, presetRow,
-                                      paymentModeButton, progressBar, statusLabel, logScroll,
+                                      modeRow, progressBar, statusLabel, logScroll,
                                       buttonRow]
         for view in stackedViews {
             content.addSubview(view)
@@ -592,9 +603,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
             statusLabel.bottomAnchor.constraint(equalTo: buttonRow.topAnchor, constant: -10),
 
-            paymentModeButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
-            paymentModeButton.topAnchor.constraint(equalTo: presetRow.bottomAnchor, constant: 8),
-            progressBar.topAnchor.constraint(equalTo: paymentModeButton.bottomAnchor, constant: 12),
+            modeRow.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
+            modeRow.topAnchor.constraint(equalTo: presetRow.bottomAnchor, constant: 8),
+            progressBar.topAnchor.constraint(equalTo: modeRow.bottomAnchor, constant: 12),
 
             buttonRow.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
             buttonRow.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -22),
@@ -673,7 +684,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             let summary = self.converter.convert(
                 inputs: inputsCopy, output: output, preset: preset,
-                paymentMode: self.paymentModeButton.state == .on,
+                mode: [MediaConverter.OutputMode.normal, .payment, .card][
+                    max(0, min(self.outputModePopup.indexOfSelectedItem, 2))],
                 onProgress: { done, total in
                     DispatchQueue.main.async {
                         self.progressBar.maxValue = Double(max(total, 1))
@@ -729,7 +741,7 @@ if let cliIndex = rawArguments.firstIndex(of: "--cli") {
     var cliOutput = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Desktop/watch-media")
     var cliPreset = Preset.all[1]
-    var cliPaymentMode = false
+    var cliMode = MediaConverter.OutputMode.normal
     var index = cliIndex + 1
     while index < rawArguments.count {
         switch rawArguments[index] {
@@ -750,7 +762,9 @@ if let cliIndex = rawArguments.firstIndex(of: "--cli") {
             index += 1
             if index < rawArguments.count { cliPreset = Preset.named(rawArguments[index]) }
         case "--qr":
-            cliPaymentMode = true
+            cliMode = .payment
+        case "--card":
+            cliMode = .card
         default:
             break
         }
@@ -759,7 +773,7 @@ if let cliIndex = rawArguments.firstIndex(of: "--cli") {
     let cliConverter = MediaConverter()
     let cliSummary = cliConverter.convert(
         inputs: cliInputs, output: cliOutput, preset: cliPreset,
-        paymentMode: cliPaymentMode,
+        mode: cliMode,
         onProgress: { _, _ in },
         onLog: { echo($0) })
     echo("完成：照片 \(cliSummary.photos)，视频 \(cliSummary.videos)，失败 \(cliSummary.failed)")

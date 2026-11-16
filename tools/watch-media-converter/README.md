@@ -69,14 +69,25 @@ App 只依赖系统里的 `ffmpeg`；照片/视频的转换参数与下面的 CL
 
 ## 使用
 
-### 收款码模式
+### 收款码 / 名片模式
 
-把收款码图片（微信/支付宝截图）拖进 App，勾选 **「收款码模式（图片输出到 Payment/）」**，转换结果会放在 `Payment/` 文件夹，直接拷到 TF 卡根目录，手表里对大肥鱼说「出示微信收款码」即可全屏展示。
+把收款码或名片二维码图片（微信/支付宝/抖音/Instagram 截图都行）拖进 App，在 **「输出」** 里选：
+
+| 输出模式 | 结果 |
+|---|---|
+| 普通输出 | `Photos/`，照片按预设缩放 |
+| **收款码** | `Payment/`，自动识别并裁切二维码 → 384×384 白底 JPG |
+| **名片** | `Card/`，同样自动裁切 → 384×384，适合微信/抖音/Instagram 等名片二维码 |
+
+转换结果整个文件夹拷到 TF 卡根目录；手表上对大肥鱼说「出示微信收款码」或「打开我的名片」即可。
 
 命令行等价：
 
 ```sh
+# 收款码
 /usr/bin/python3 convert.py --input ~/Pictures/收款码 --output ~/Desktop/watch-media --qr
+# 个人名片二维码
+/usr/bin/python3 convert.py --input ~/Pictures/名片 --output ~/Desktop/watch-media --card
 ```
 
 ### 图形界面（推荐）
