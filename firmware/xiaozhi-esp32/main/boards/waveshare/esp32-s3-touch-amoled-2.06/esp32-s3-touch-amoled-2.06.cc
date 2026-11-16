@@ -290,6 +290,10 @@ private:
     lv_obj_t* photo_image_ = nullptr;
     lv_obj_t* video_image_ = nullptr;
     lv_image_dsc_t video_dsc_ = {};
+    uint32_t video_frame_w_ = 0;
+    uint32_t video_frame_h_ = 0;
+    uint32_t video_fps_frames_ = 0;
+    int64_t video_fps_window_start_ = 0;
     WatchMedia::VideoPlayer video_player_;
     lv_obj_t* voice_memo_list_ = nullptr;
     lv_timer_t* voice_memo_timer_ = nullptr;
@@ -3001,6 +3005,8 @@ private:
         OpenPage(media_entries_[index].name.c_str(), kOpenVideos);
         media_video_mode_ = true;
         video_dsc_ = {};
+        video_frame_w_ = 0;
+        video_frame_h_ = 0;
         video_image_ = lv_image_create(watch_page_);
         lv_obj_align(video_image_, LV_ALIGN_CENTER, 0, 2);
         lv_obj_clear_flag(video_image_, LV_OBJ_FLAG_CLICKABLE);
@@ -3022,19 +3028,43 @@ private:
         DisplayLockGuard lock(this);
         if (!lock || video_image_ == nullptr)
             return;
+        const uint32_t frame_w = static_cast<uint32_t>(width);
+        const uint32_t frame_h = static_cast<uint32_t>(height);
         video_dsc_.header.magic = LV_IMAGE_HEADER_MAGIC;
         video_dsc_.header.cf = LV_COLOR_FORMAT_RGB565;
-        video_dsc_.header.w = static_cast<uint32_t>(width);
-        video_dsc_.header.h = static_cast<uint32_t>(height);
-        video_dsc_.header.stride = static_cast<uint32_t>(width) * 2;
+        video_dsc_.header.w = frame_w;
+        video_dsc_.header.h = frame_h;
+        video_dsc_.header.stride = frame_w * 2;
         video_dsc_.data = rgb565;
-        video_dsc_.data_size = static_cast<size_t>(width) * height * 2;
+        video_dsc_.data_size = static_cast<size_t>(frame_w) * frame_h * 2;
         lv_image_set_src(video_image_, &video_dsc_);
-        lv_obj_set_size(video_image_, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        const uint32_t scale_x = static_cast<uint32_t>(388 * 256) / width;
-        const uint32_t scale_y = static_cast<uint32_t>(424 * 256) / height;
-        lv_image_set_scale(video_image_, std::min(scale_x, scale_y));
-        lv_obj_align(video_image_, LV_ALIGN_CENTER, 0, 2);
+        if (video_frame_w_ != frame_w || video_frame_h_ != frame_h) {
+            // Geometry work happens once per resolution change, not per frame.
+            video_frame_w_ = frame_w;
+            video_frame_h_ = frame_h;
+            lv_obj_set_size(video_image_, static_cast<int32_t>(frame_w), static_cast<int32_t>(frame_h));
+            // Our converter keeps frames within the viewport, so 1:1 avoids the
+            // very slow software image scaler; only downscale as a fallback.
+            uint32_t scale = 256;
+            if (frame_w > 388 || frame_h > 424) {
+                const uint32_t scale_x = static_cast<uint32_t>(388 * 256) / frame_w;
+                const uint32_t scale_y = static_cast<uint32_t>(424 * 256) / frame_h;
+                scale = std::min(scale_x, scale_y);
+            }
+            lv_image_set_scale(video_image_, scale);
+            lv_obj_align(video_image_, LV_ALIGN_CENTER, 0, 2);
+            video_fps_frames_ = 0;
+            video_fps_window_start_ = esp_timer_get_time();
+        } else {
+            lv_obj_invalidate(video_image_);
+            ++video_fps_frames_;
+            const int64_t now = esp_timer_get_time();
+            if (video_fps_window_start_ > 0 && now - video_fps_window_start_ >= 1000000) {
+                ESP_LOGI(TAG, "Video fps: %u", static_cast<unsigned>(video_fps_frames_));
+                video_fps_frames_ = 0;
+                video_fps_window_start_ = now;
+            }
+        }
     }
 
     static std::string MemoTimeText(const VoiceMemoEntry& entry) {
