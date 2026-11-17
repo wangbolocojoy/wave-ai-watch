@@ -478,9 +478,9 @@ void Application::CheckAssetsVersion() {
 }
 
 void Application::CheckNewVersion() {
-    const int MAX_RETRY = 10;
+    const int MAX_RETRY = 3;
     int retry_count = 0;
-    int retry_delay = 10;  // Initial retry delay in seconds
+    int retry_delay = 3;  // Initial retry delay in seconds
 
     auto& board = Board::GetInstance();
     while (true) {
@@ -526,7 +526,7 @@ void Application::CheckNewVersion() {
             continue;
         }
         retry_count = 0;
-        retry_delay = 10;  // Reset retry delay
+        retry_delay = 3;  // Reset retry delay
 
         if (ota_->HasNewVersion()) {
             if (UpgradeFirmware(ota_->GetFirmwareUrl(), ota_->GetFirmwareVersion())) {

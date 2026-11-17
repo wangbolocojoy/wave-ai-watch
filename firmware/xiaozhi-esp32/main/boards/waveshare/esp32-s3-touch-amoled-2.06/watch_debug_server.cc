@@ -336,7 +336,7 @@ void WatchDebugServer::Start() {
     // The JPEG screenshot path walks the whole LVGL object tree; 10 KB was
     // still too small for complex pages (music list) and the watchdog killed
     // the httpd task. Match the config service's 16 KB.
-    config.stack_size = 16384;
+    config.stack_size = 12288;
     config.server_port = kPort;
     config.max_uri_handlers = 12;
     config.lru_purge_enable = true;

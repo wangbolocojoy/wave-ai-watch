@@ -180,8 +180,6 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
         .panel_handle = panel_,
         .control_handle = nullptr,
         .buffer_size = static_cast<uint32_t>(width_ * 20),
-        // A second buffer costs 16 KB of internal SRAM and pushed the PHY init
-        // into an allocation failure; keep a single buffer.
         .double_buffer = false,
         .trans_size = 0,
         .hres = static_cast<uint32_t>(width_),
@@ -197,7 +195,9 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
         .flags =
             {
                 .buff_dma = 1,
-                .buff_spiram = 0,
+                // Internal SRAM is down to ~50 KB once MultiNet is loaded; the
+                // QSPI flush can source the strip buffer from PSRAM instead.
+                .buff_spiram = 1,
                 .sw_rotate = 0,
                 .swap_bytes = 1,
                 .full_refresh = 0,

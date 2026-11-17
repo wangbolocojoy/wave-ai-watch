@@ -74,7 +74,7 @@ bool WatchConfigService::Start() {
     config.ctrl_port = 32770;
     config.max_open_sockets = 3;
     config.max_uri_handlers = 6;
-    config.stack_size = 16384;
+    config.stack_size = 12288;
     if (httpd_start(&server_, &config) != ESP_OK) {
         server_ = nullptr;
         ESP_LOGW(kTag, "Unable to start the local settings service yet");

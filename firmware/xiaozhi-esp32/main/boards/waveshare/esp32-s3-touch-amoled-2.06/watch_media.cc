@@ -20,6 +20,7 @@
 #include "audio_service.h"
 #include "board.h"
 #include "esp_ae_rate_cvt.h"
+#include "esp_jpeg_common.h"
 #include "jpeg_decoder.h"
 #include "esp_jpeg_dec.h"
 
@@ -528,8 +529,8 @@ void VideoPlayer::Run(Job job) {
         }
         if (pixels_capacity < static_cast<size_t>(out_len)) {
             if (pixels != nullptr)
-                heap_caps_free(pixels);
-            pixels = static_cast<uint8_t*>(PsramAlloc(static_cast<size_t>(out_len)));
+                jpeg_free_align(pixels);
+            pixels = static_cast<uint8_t*>(jpeg_calloc_align(static_cast<size_t>(out_len), 16));
             pixels_capacity = pixels == nullptr ? 0 : static_cast<size_t>(out_len);
         }
         if (pixels == nullptr)
@@ -565,7 +566,7 @@ void VideoPlayer::Run(Job job) {
     jpeg_dec_close(decoder);
     std::fclose(file);
     if (pixels != nullptr)
-        heap_caps_free(pixels);
+        jpeg_free_align(pixels);
     ESP_LOGI(kTag, "Video stopped");
 }
 

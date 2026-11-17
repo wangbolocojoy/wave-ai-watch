@@ -71,6 +71,9 @@ std::unique_ptr<Http> Ota::SetupHttp() {
     auto& board = Board::GetInstance();
     auto network = board.GetNetwork();
     auto http = network->CreateHttp(0);
+    // A stalled TLS/HTTP request used to freeze the whole activation phase for
+    // minutes; fail fast so the watch can fall back to local operation.
+    http->SetTimeout(8000);
     auto user_agent = SystemInfo::GetUserAgent();
     http->SetHeader("Activation-Version", has_serial_number_ ? "2" : "1");
     http->SetHeader("Device-Id", SystemInfo::GetMacAddress().c_str());
