@@ -213,7 +213,7 @@ WatchMusicPlayer& WatchMusicPlayer::GetInstance() {
 bool WatchMusicPlayer::Initialize() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (task_ == nullptr &&
-        xTaskCreate(TaskEntry, "watch_music", 4096, this, 5, &task_) != pdPASS) {
+        xTaskCreate(TaskEntry, "watch_music", 4096, this, 6, &task_) != pdPASS) {
         ESP_LOGE(TAG, "Unable to start music task");
         return false;
     }
@@ -827,21 +827,10 @@ void WatchMusicPlayer::SetAssistantSessionActive(bool active) {
 }
 
 void WatchMusicPlayer::SetMusicExclusiveAudio(bool exclusive) {
-    static bool exclusive_active = false;
-    if (exclusive == exclusive_active)
-        return;
-    exclusive_active = exclusive;
-    auto& audio = Application::GetInstance().GetAudioService();
-    if (exclusive) {
-        // Free the AFE/MultiNet CPU for decoding while the song plays.
-        audio.EnableWakeWordDetection(false);
-        audio.EnableVoiceProcessing(false);
-        ESP_LOGI(TAG, "music mode: wake word + voice processing paused");
-    } else {
-        audio.EnableVoiceProcessing(true);
-        audio.EnableWakeWordDetection(true);
-        ESP_LOGI(TAG, "music mode off: wake word restored");
-    }
+    // Disabled: toggling the AFE/wake word from the music task could deadlock
+    // against the audio pipeline and freeze the UI. The priority re-balancing
+    // (music 5 / output 6 / LVGL 3) and the deeper PCM queue keep audio smooth.
+    (void)exclusive;
 }
 
 bool WatchMusicPlayer::SetShuffle(bool enabled) {

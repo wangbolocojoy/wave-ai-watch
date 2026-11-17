@@ -195,9 +195,9 @@ SpiLcdDisplay::SpiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
         .flags =
             {
                 .buff_dma = 1,
-                // Internal SRAM is down to ~50 KB once MultiNet is loaded; the
-                // QSPI flush can source the strip buffer from PSRAM instead.
-                .buff_spiram = 1,
+                // PSRAM strip buffers stalled the SPI flush and froze the LVGL
+                // task; keep the buffer in internal SRAM.
+                .buff_spiram = 0,
                 .sw_rotate = 0,
                 .swap_bytes = 1,
                 .full_refresh = 0,
