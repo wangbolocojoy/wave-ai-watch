@@ -140,7 +140,7 @@ void AudioService::Start() {
             audio_service->AudioOutputTask();
             vTaskDelete(NULL);
         },
-        "audio_output", 2048 * 2, this, 4, &audio_output_task_handle_);
+        "audio_output", 2048 * 2, this, 6, &audio_output_task_handle_);
 #else
     /* Start the audio input task */
     xTaskCreate(
@@ -158,7 +158,7 @@ void AudioService::Start() {
             audio_service->AudioOutputTask();
             vTaskDelete(NULL);
         },
-        "audio_output", 2048, this, 4, &audio_output_task_handle_);
+        "audio_output", 2048, this, 6, &audio_output_task_handle_);
 #endif
 
     /* Start the opus codec task */
@@ -168,7 +168,7 @@ void AudioService::Start() {
             audio_service->OpusCodecTask();
             vTaskDelete(NULL);
         },
-        "opus_codec", 2048 * 12, this, 2, &opus_codec_task_handle_);
+        "opus_codec", 2048 * 12, this, 5, &opus_codec_task_handle_);
 }
 
 void AudioService::Stop() {
@@ -347,10 +347,29 @@ void AudioService::AudioInputTask() {
 }
 
 void AudioService::AudioOutputTask() {
+    int64_t last_starve_log_us = 0;
     while (true) {
         std::unique_lock<std::mutex> lock(audio_queue_mutex_);
-        audio_queue_cv_.wait(
-            lock, [this]() { return !audio_playback_queue_.empty() || service_stopped_.load(); });
+        // A 100 ms timeout turns an empty queue into a measurable "audio starved"
+        // event instead of an invisible gap in playback.
+        if (!audio_queue_cv_.wait_for(
+                lock, std::chrono::milliseconds(100),
+                [this]() { return !audio_playback_queue_.empty() || service_stopped_.load(); })) {
+            if (!service_stopped_.load()) {
+                // Only a gap that happens *while we were playing* is audible
+                // starvation; an idle queue is normal.
+                const int64_t now = esp_timer_get_time();
+                if (audio_last_output_us_ != 0 && now - audio_last_output_us_ < 400000) {
+                    ++audio_starve_count_;
+                    if (now - last_starve_log_us > 5000000) {
+                        ESP_LOGW(TAG, "Audio starved %d times (queue empty >100ms)",
+                                 audio_starve_count_);
+                        last_starve_log_us = now;
+                    }
+                }
+            }
+            continue;
+        }
         if (service_stopped_.load()) {
             break;
         }
@@ -385,6 +404,7 @@ void AudioService::AudioOutputTask() {
 
             /* Update the last output time */
             last_output_time_ = std::chrono::steady_clock::now();
+            audio_last_output_us_ = esp_timer_get_time();
             debug_statistics_.playback_count++;
         }
 

@@ -67,6 +67,9 @@ public:
     // Absolute path of what is playing right now, empty when stopped.
     std::string PlayingPath() const;
     void SetAssistantSessionActive(bool active);
+    // Music needs the whole CPU: the always-on wake word / AFE costs enough to
+    // starve the PCM queue (audible stutter). Toggled around playback.
+    void SetMusicExclusiveAudio(bool exclusive);
 
 private:
     struct TrackMetadata {

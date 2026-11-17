@@ -213,7 +213,7 @@ WatchMusicPlayer& WatchMusicPlayer::GetInstance() {
 bool WatchMusicPlayer::Initialize() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (task_ == nullptr &&
-        xTaskCreate(TaskEntry, "watch_music", 4096, this, 2, &task_) != pdPASS) {
+        xTaskCreate(TaskEntry, "watch_music", 4096, this, 5, &task_) != pdPASS) {
         ESP_LOGE(TAG, "Unable to start music task");
         return false;
     }
@@ -522,6 +522,7 @@ void WatchMusicPlayer::Select(int index) {
     auto& audio = Application::GetInstance().GetAudioService();
     audio.SetPcmPlaybackSourceGeneration(kWatchMusicSource, generation);
     audio.SetPcmPlaybackSourcePaused(kWatchMusicSource, false);
+    SetMusicExclusiveAudio(true);
     WatchSystemLog::Event("music", "play", title.c_str());
     if (task_)
         xTaskNotifyGive(task_);
@@ -671,6 +672,7 @@ std::string WatchMusicPlayer::Pause() {
     }
     Application::GetInstance().GetAudioService().SetPcmPlaybackSourcePaused(kWatchMusicSource,
                                                                             true);
+    SetMusicExclusiveAudio(false);
     WatchSystemLog::Event("music", "pause");
     return "音乐已暂停。";
 }
@@ -684,6 +686,7 @@ std::string WatchMusicPlayer::Resume() {
     }
     Application::GetInstance().GetAudioService().SetPcmPlaybackSourcePaused(kWatchMusicSource,
                                                                             false);
+    SetMusicExclusiveAudio(true);
     WatchSystemLog::Event("music", "resume");
     Application::GetInstance().StopListening();
     Application::GetInstance().AbortSpeaking(kAbortReasonNone);
@@ -708,6 +711,7 @@ std::string WatchMusicPlayer::Stop() {
     auto& audio = Application::GetInstance().GetAudioService();
     audio.SetPcmPlaybackSourceGeneration(kWatchMusicSource, generation);
     audio.SetPcmPlaybackSourcePaused(kWatchMusicSource, false);
+    SetMusicExclusiveAudio(false);
     WatchSystemLog::Event("music", "stop");
     ESP_LOGW(TAG, "Stop() called");
     if (task_)
@@ -729,6 +733,7 @@ std::string WatchMusicPlayer::Status() const {
 }
 
 bool WatchMusicPlayer::PlayFilePath(const std::string& path) {
+    SetMusicExclusiveAudio(true);
     if (path.empty())
         return false;
     uint32_t generation;
@@ -819,6 +824,24 @@ void WatchMusicPlayer::SetAssistantSessionActive(bool active) {
         Stop();
     }
     assistant_session_active_ = active;
+}
+
+void WatchMusicPlayer::SetMusicExclusiveAudio(bool exclusive) {
+    static bool exclusive_active = false;
+    if (exclusive == exclusive_active)
+        return;
+    exclusive_active = exclusive;
+    auto& audio = Application::GetInstance().GetAudioService();
+    if (exclusive) {
+        // Free the AFE/MultiNet CPU for decoding while the song plays.
+        audio.EnableWakeWordDetection(false);
+        audio.EnableVoiceProcessing(false);
+        ESP_LOGI(TAG, "music mode: wake word + voice processing paused");
+    } else {
+        audio.EnableVoiceProcessing(true);
+        audio.EnableWakeWordDetection(true);
+        ESP_LOGI(TAG, "music mode off: wake word restored");
+    }
 }
 
 bool WatchMusicPlayer::SetShuffle(bool enabled) {
